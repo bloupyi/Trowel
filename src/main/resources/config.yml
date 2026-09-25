@@ -1,0 +1,35 @@
+# Trowel: building tools (selection, fills, shapes, clipboard, brushes, splines, sculpting).
+# Commands work like WorldEdit: //set stone, //copy, //brush sphere 4...
+# The G key (quick actions) opens its menu.
+
+limits:
+  # Blocks a single operation may change. Beyond that it is refused: undoing it
+  # means keeping the previous state of every one of them.
+  max-blocks: 50000
+  # Blocks placed per tick. Computing happens off the main thread, placing does
+  # not: it is spread out so the server never freezes.
+  blocks-per-tick: 8192
+  # Undoable operations kept per player.
+  undo-steps: 25
+  # Chunks (16x16) an operation may read.
+  max-chunks: 1024
+
+tools:
+  # Reach of the wand and brushes, in blocks.
+  reach: 160
+  # Largest brush radius.
+  max-brush-size: 64
+  # Two brush strokes closer than this (in ticks) are undone together.
+  stroke-ticks: 30
+
+wand:
+  # Item used as the selection wand.
+  material: WOODEN_AXE
+
+axiom:
+  # Compatibility with the Axiom mod (AxiomPaper plugin): Axiom is only active where the host
+  # plugin lets the player build, and only inside the buildable area.
+  enabled: true
+  # Axiom permission granted while the player may build. axiom.default suits a public
+  # server; axiom.all grants everything.
+  permission: axiom.default

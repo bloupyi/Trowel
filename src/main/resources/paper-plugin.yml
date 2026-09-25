@@ -1,0 +1,20 @@
+name: Trowel
+version: '${project.version}'
+main: com.stackmc.trowel.TrowelPlugin
+bootstrapper: com.stackmc.trowel.TrowelBootstrap
+api-version: '26.2'
+authors: [bloupyi]
+description: "Asynchronous building tools: selections, patterns, masks, expressions, splines, sculpting, brushes."
+dependencies:
+  server:
+    AxiomPaper:
+      load: BEFORE
+      required: false
+      join-classpath: false
+permissions:
+  trowel.use:
+    description: "Trowel building tools (//set, //copy, //brush...)"
+    default: op
+  trowel.library.admin:
+    description: "Overwrite or delete anyone's schematics"
+    default: op
