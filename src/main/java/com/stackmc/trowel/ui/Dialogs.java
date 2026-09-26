@@ -840,11 +840,13 @@ public final class Dialogs implements Listener {
                         in -> session.isEditMarkers() ? "markers protect" : "markers edit")
                 .act("Pattern syntax", "Patterns, masks, noises, palettes", (in, who) -> help(who))
                 .run("Palettes", "//palettes", in -> "palettes")
-                .stay(session.isCoeditShow() ? "Co-editing: stop seeing the others" : "Co-editing: see the others",
-                        "The selection and aimed block of the other builders in the same world, in their color",
+                .stay("Co-editing: others " + (session.isCoeditShow() ? "visible" : "hidden"),
+                        "The selection and aimed block of the other builders in the same world, in their color. Click to "
+                                + (session.isCoeditShow() ? "hide them" : "see them"),
                         in -> "coedit show " + (session.isCoeditShow() ? "off" : "on"))
-                .stay(session.isCoeditShare() ? "Co-editing: hide my selection" : "Co-editing: show my selection",
-                        "What the others see of you", in -> "coedit share " + (session.isCoeditShare() ? "off" : "on"))
+                .stay("Co-editing: my selection " + (session.isCoeditShare() ? "shared" : "hidden"),
+                        "What the others see of you. Click to " + (session.isCoeditShare() ? "hide it" : "share it"),
+                        in -> "coedit share " + (session.isCoeditShare() ? "off" : "on"))
                 .run("All commands", "//help", in -> "help");
         screen.show();
     }
