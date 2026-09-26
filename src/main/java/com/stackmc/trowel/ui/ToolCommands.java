@@ -826,7 +826,7 @@ final class ToolCommands {
     }
 
     /** A closed frame, resampled into {@code samples} regular points. */
-    private static double[][] ring(List<double[]> points, int samples, boolean faceted) {
+    static double[][] ring(List<double[]> points, int samples, boolean faceted) {
         List<double[]> closed = new ArrayList<>(points);
         closed.add(points.get(0));
         List<double[]> dense = faceted ? linear(closed) : closedSpline(points);

@@ -56,6 +56,9 @@ public final class Hud {
     private static final Particle.DustOptions POINT = dust(255, 190, 40, 1.2f);
     private static final Particle.DustOptions CURVE = dust(255, 210, 120, 0.6f);
     private static final Particle.DustOptions FRAME = dust(120, 255, 230, 0.8f);
+    private static final Particle.DustOptions LOFT = dust(120, 255, 230, 0.5f);
+    private static final int LOFT_SAMPLES = 48;
+    private static final int LOFT_RAILS = 8;
 
     private final Trowel trowel;
     private final Map<UUID, Flash> flashes = new HashMap<>();
@@ -211,6 +214,46 @@ public final class Hud {
                 Location first = frame.get(0);
                 line(player, previous.getBlockX() + 0.5, previous.getBlockY() + 0.5, previous.getBlockZ() + 0.5,
                         first.getBlockX() + 0.5, first.getBlockY() + 0.5, first.getBlockZ() + 0.5, FRAME);
+            }
+        }
+        drawLoft(player, session, world);
+    }
+
+    /** The loft as //loft set will stretch it: each frame's closed curve, and rails from frame to frame. */
+    private void drawLoft(Player player, Session session, World world) {
+        java.util.List<double[][]> rings = new java.util.ArrayList<>();
+        for (java.util.List<Location> frame : session.getFrames()) {
+            if (frame.size() < 2 || !world.equals(frame.get(0).getWorld())) {
+                continue;
+            }
+            java.util.List<double[]> points = new java.util.ArrayList<>();
+            for (Location l : frame) {
+                points.add(new double[]{l.getBlockX() + 0.5, l.getBlockY() + 0.5, l.getBlockZ() + 0.5});
+            }
+            try {
+                rings.add(ToolCommands.ring(points, LOFT_SAMPLES, false));
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+        }
+        for (double[][] ring : rings) {
+            for (double[] p : ring) {
+                player.spawnParticle(Particle.DUST, p[0], p[1], p[2], 1, 0, 0, 0, 0, FRAME);
+            }
+        }
+        if (rings.size() < 2) {
+            return;
+        }
+        for (int m = 0; m < LOFT_SAMPLES; m += LOFT_SAMPLES / LOFT_RAILS) {
+            java.util.List<double[]> rail = new java.util.ArrayList<>();
+            for (double[][] ring : rings) {
+                rail.add(ring[m]);
+            }
+            java.util.List<double[]> dense = com.stackmc.trowel.geom.Shapes.spline(rail);
+            int step = Math.max(1, dense.size() / 60);
+            for (int i = 0; i < dense.size(); i += step) {
+                double[] p = dense.get(i);
+                player.spawnParticle(Particle.DUST, p[0], p[1], p[2], 1, 0, 0, 0, 0, LOFT);
             }
         }
     }
