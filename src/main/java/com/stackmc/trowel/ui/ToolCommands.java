@@ -679,12 +679,15 @@ final class ToolCommands {
     private void loft(Player player, String[] args) {
         Session session = trowel.session(player);
         World world = player.getWorld();
-        session.getFrames().removeIf(frame -> frame.isEmpty() || !world.equals(frame.get(0).getWorld()));
+        // An empty frame is the one //loft frame just opened: it waits for its points.
+        session.getFrames().removeIf(frame -> !frame.isEmpty() && !world.equals(frame.get(0).getWorld()));
         List<List<Location>> frames = session.getFrames();
         String sub = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
         switch (sub) {
             case "frame", "f" -> {
-                frames.add(new ArrayList<>());
+                if (frames.isEmpty() || !frames.get(frames.size() - 1).isEmpty()) {
+                    frames.add(new ArrayList<>());
+                }
                 Chat.info(player, "Frame " + frames.size() + " opened: //loft point on each of its points, in order.");
             }
             case "point", "p" -> {
@@ -697,11 +700,13 @@ final class ToolCommands {
                         block.getX() + " " + block.getY() + " " + block.getZ());
             }
             case "remove", "r" -> {
-                if (frames.isEmpty() || frames.get(frames.size() - 1).isEmpty()) {
+                if (frames.isEmpty()) {
                     throw new IllegalArgumentException("Nothing to remove.");
                 }
                 List<Location> last = frames.get(frames.size() - 1);
-                last.remove(last.size() - 1);
+                if (!last.isEmpty()) {
+                    last.remove(last.size() - 1);
+                }
                 if (last.isEmpty()) {
                     frames.remove(frames.size() - 1);
                 }
