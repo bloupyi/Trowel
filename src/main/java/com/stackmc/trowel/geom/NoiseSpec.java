@@ -41,7 +41,10 @@ public final class NoiseSpec {
 
     public enum CellDistance { EUCLIDEAN, EUCLIDEAN_SQ, MANHATTAN, CHEBYSHEV, HYBRID }
 
-    public enum CellReturn { CELL, DISTANCE, DISTANCE_SQ, INVERSE, DISTANCE2, ADD, SUB, MUL, DIV, EDGE }
+    public enum CellReturn {
+        CELL, DISTANCE, DISTANCE_SQ, INVERSE, LOG, EXP, DISTANCE2, ADD, SUB, MUL, DIV, DISTANCE2_SQ, DISTANCE2_INV,
+        DISTANCE2_LOG, DISTANCE2_EXP, EDGE, ROUNDED
+    }
 
     private Base base = Base.PERLIN;
     private Noise.Kind kind;
@@ -304,13 +307,21 @@ public final class NoiseSpec {
                 case "distance", "1" -> CellReturn.DISTANCE;
                 case "distancesquared", "sq" -> CellReturn.DISTANCE_SQ;
                 case "distanceinverse", "inv" -> CellReturn.INVERSE;
+                case "distancelog", "log" -> CellReturn.LOG;
+                case "distanceexp", "exp" -> CellReturn.EXP;
+                case "distance2sq", "2sq" -> CellReturn.DISTANCE2_SQ;
+                case "distance2inv", "2inv" -> CellReturn.DISTANCE2_INV;
+                case "distance2log", "2log" -> CellReturn.DISTANCE2_LOG;
+                case "distance2exp", "2exp" -> CellReturn.DISTANCE2_EXP;
+                case "rounded", "r" -> CellReturn.ROUNDED;
                 case "distance2", "2" -> CellReturn.DISTANCE2;
                 case "distance2add", "2add", "add" -> CellReturn.ADD;
                 case "distance2sub", "2sub", "sub" -> CellReturn.SUB;
                 case "distance2mul", "2mul", "mul" -> CellReturn.MUL;
                 case "distance2div", "2div", "div" -> CellReturn.DIV;
                 case "edge", "e" -> CellReturn.EDGE;
-                default -> throw new IllegalArgumentException("Return: cell, 1, sq, inv, 2, add, sub, mul, div or edge.");
+                default -> throw new IllegalArgumentException("Return: cell, 1, sq, inv, log, exp, 2, 2add, 2sub, 2mul, "
+                        + "2div, 2sq, 2inv, 2log, 2exp, edge or r (rounded).");
             };
             case "gaborfrequency", "gf" -> gaborFrequency = number(v, name);
             case "gaborradius", "gr" -> gaborRadius = positive(v, name);
@@ -541,7 +552,15 @@ public final class NoiseSpec {
             case SUB -> (f2 - f1);
             case MUL -> f1 * f2;
             case DIV -> f2 == 0 ? 0 : f1 / f2;
+            case LOG -> Math.log1p(f1 * 1.718281828);
+            case EXP -> 1 - Math.exp(-f1 * 2);
+            case DISTANCE2_SQ -> f2 * f2;
+            case DISTANCE2_INV -> 1 - Math.min(1, f2);
+            case DISTANCE2_LOG -> Math.log1p(f2 * 1.718281828);
+            case DISTANCE2_EXP -> 1 - Math.exp(-f2 * 2);
             case EDGE -> Math.min(1, (f2 - f1) * 1.8);
+            // Pebbles: a dome inside each cell, rounded down to zero at the edges.
+            case ROUNDED -> Math.sqrt(Math.max(0, 1 - Math.pow(Math.min(1, f1 / Math.max(1e-6, (f1 + f2) * 0.5)), 2)));
         };
         return Math.max(-1, Math.min(1, v * 2 - 1));
     }

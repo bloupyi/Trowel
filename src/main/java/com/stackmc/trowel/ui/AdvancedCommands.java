@@ -51,7 +51,7 @@ final class AdvancedCommands {
     static final String SPLINES = "Splines";
     static final String EXPRESSIONS = "Expressions and generation";
 
-    private static final Set<Character> VALUE_FLAGS = Set.of('p', 'q', 'r', 's', 't', 'n', 'e', 'm', 'i', 'x');
+    private static final Set<Character> VALUE_FLAGS = Set.of('p', 'q', 'r', 's', 't', 'n', 'e', 'm', 'i', 'x', 'w');
     private static final Set<Character> BOOL_FLAGS = Set.of('h', 'c', 'z', 'o', 'a');
     private static final java.util.regex.Pattern RADII = java.util.regex.Pattern.compile("^[0-9.]+(?::[0-9.]+)?(?:,[0-9.]+(?::[0-9.]+)?)*$");
 
@@ -65,7 +65,7 @@ final class AdvancedCommands {
 
     void define() {
         c.add("spline|ezspline|ezsp|sp", SPLINES, "//spline [shape] <pattern> [radii] [-t twist] [-r roll] "
-                        + "[-s stretch] [-e caps] [-n orientation] [-q quality] [-p tension:bias:continuity] [-h] [-c]",
+                        + "[-s stretch] [-e caps] [-n orientation] [-q quality] [-p tension:bias:continuity] [-w smoothblocks] [-h] [-c]",
                 "A shape swept along the points (//point). //spline help: shapes and settings.",
                 this::spline, this::completeSpline);
         c.add("point|points|pt", SPLINES, "//point [here|undo|clear|list|sel|reverse|insert <n>]",
@@ -251,6 +251,11 @@ final class AdvancedCommands {
                 normal, kb[0], kb[1], kb[2], closed);
         Mask mask = values.containsKey('m') ? c.mask(player, values.get('m')) : null;
         Box reads = Sweep.bounds(points, options, section);
+        com.stackmc.trowel.spline.Smoothblocks.Spec smooth = values.containsKey('w')
+                ? com.stackmc.trowel.spline.Smoothblocks.Spec.parse(values.get('w')) : null;
+        if (smooth != null) {
+            com.stackmc.trowel.pattern.Colors.prepare();
+        }
 
         Sweep.Fill fill;
         if (shape.equals("clipboard")) {
@@ -266,7 +271,7 @@ final class AdvancedCommands {
         String label = "Spline " + (shapeToken == null ? "circle" : shape);
         Sections.Section built = section;
         trowel.engine().submit(player, Engine.Job.of(label, world, reads,
-                context -> Sweep.build(context, points, built, options, fill, mask)));
+                context -> Sweep.build(context, points, built, options, fill, mask, smooth)));
     }
 
     /** The clipboard along the path: x across, y up, z along, repeated (or stretched with -z). */
@@ -342,6 +347,7 @@ final class AdvancedCommands {
                 .append(Component.text("expr <palette> [radii] <expression> [-z] [-o] [-x reach], ", NamedTextColor.GOLD))
                 .append(Component.text("clipboard [radii] [-z] [-a]", NamedTextColor.GOLD)));
         Chat.hint(player, "Radii: 5, or 1,12 (grows), 1,12,1, 1,0.2:12,1 (keyframes).");
+        Chat.hint(player, "-w Slabs|SlabsAndStairs|Panes|Layers: shaping blocks on the surface, like ezEdits smoothblocks.");
         Chat.hint(player, "-t twist (degrees per diameter), -r roll or start,end, -s stretch, -e flat|soft|spike|round|cube, "
                 + "-n consistent|horizontal|upright, -q fast|balanced|high|exact, -p tension:bias:continuity, "
                 + "-h hollow, -c loop, -m mask.");

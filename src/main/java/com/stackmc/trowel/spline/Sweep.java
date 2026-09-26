@@ -120,6 +120,14 @@ public final class Sweep {
      */
     public static ChangeSet build(EditContext context, List<double[]> points, Sections.Section section, Options o,
                                   Fill fill, Mask mask) {
+        return build(context, points, section, o, fill, mask, null);
+    }
+
+    /**
+     * The whole computation, with shaping blocks on the surface ({@code smooth}, or {@code null}).
+     */
+    public static ChangeSet build(EditContext context, List<double[]> points, Sections.Section section, Options o,
+                                  Fill fill, Mask mask, Smoothblocks.Spec smooth) {
         Progress progress = context.progress();
         progress.phase("path", 0);
         double fine = o.quality().step();
@@ -203,17 +211,114 @@ public final class Sweep {
         ChangeSet changes = context.changes();
         Long2ObjectOpenHashMap<BlockData> inside = o.hollow() ? new Long2ObjectOpenHashMap<>() : null;
         Local local = new Local();
+        Probe probe = new Probe(path, o, section, radius, w, roll, stride);
         progress.phase("shape", coarse.size());
-        for (Long2IntMap.Entry entry : coarse.long2IntEntrySet()) {
-            progress.tick();
-            long key = entry.getLongKey();
-            int c = entry.getIntValue();
-            int x = Keys.x(key);
-            int y = Keys.y(key);
-            int z = Keys.z(key);
-            double qx = x + 0.5;
-            double qy = y + 0.5;
-            double qz = z + 0.5;
+        if (smooth != null) {
+            Long2ObjectOpenHashMap<Smoothblocks.Cell> cells = new Long2ObjectOpenHashMap<>();
+            for (Long2IntMap.Entry entry : coarse.long2IntEntrySet()) {
+                progress.tick();
+                long key = entry.getLongKey();
+                int c = entry.getIntValue();
+                int x = Keys.x(key);
+                int y = Keys.y(key);
+                int z = Keys.z(key);
+                if (mask != null && !mask.test(x, y, z, context.view())) {
+                    continue;
+                }
+                int bits = 0;
+                BlockData full = null;
+                if (probe.eval(x + 0.5, y + 0.5, z + 0.5, c, local) > 0) {
+                    full = fill.at(x, y, z, local);
+                }
+                for (int i = 0; i < 8; i++) {
+                    double sx = x + ((i & 1) != 0 ? 0.75 : 0.25);
+                    double sy = y + ((i & 2) != 0 ? 0.75 : 0.25);
+                    double sz = z + ((i & 4) != 0 ? 0.75 : 0.25);
+                    if (probe.eval(sx, sy, sz, c, local) > 0) {
+                        bits |= 1 << i;
+                        if (full == null) {
+                            full = fill.at(x, y, z, local);
+                        }
+                    }
+                }
+                if (bits != 0 && full != null) {
+                    cells.put(key, new Smoothblocks.Cell(bits, full));
+                }
+            }
+            Long2ObjectOpenHashMap<BlockData> shaped = Smoothblocks.shape(cells, smooth);
+            if (inside != null) {
+                inside.putAll(shaped);
+            } else {
+                shaped.long2ObjectEntrySet().forEach(e -> changes.set(e.getLongKey(), e.getValue()));
+            }
+        } else {
+            for (Long2IntMap.Entry entry : coarse.long2IntEntrySet()) {
+                progress.tick();
+                long key = entry.getLongKey();
+                int x = Keys.x(key);
+                int y = Keys.y(key);
+                int z = Keys.z(key);
+                if (!(probe.eval(x + 0.5, y + 0.5, z + 0.5, entry.getIntValue(), local) > 0)) {
+                    continue;
+                }
+                if (mask != null && !mask.test(x, y, z, context.view())) {
+                    continue;
+                }
+                BlockData data = fill.at(x, y, z, local);
+                if (data == null) {
+                    continue;
+                }
+                if (inside != null) {
+                    inside.put(key, data);
+                } else {
+                    changes.set(x, y, z, data);
+                }
+            }
+        }
+
+        if (inside != null) {
+            progress.phase("hollow", inside.size());
+            for (Long2ObjectOpenHashMap.Entry<BlockData> entry : inside.long2ObjectEntrySet()) {
+                progress.tick();
+                long key = entry.getLongKey();
+                if (!inside.containsKey(Keys.offset(key, 1, 0, 0)) || !inside.containsKey(Keys.offset(key, -1, 0, 0))
+                        || !inside.containsKey(Keys.offset(key, 0, 1, 0)) || !inside.containsKey(Keys.offset(key, 0, -1, 0))
+                        || !inside.containsKey(Keys.offset(key, 0, 0, 1)) || !inside.containsKey(Keys.offset(key, 0, 0, -1))) {
+                    changes.set(key, entry.getValue());
+                }
+            }
+        }
+        return changes;
+    }
+
+    /** Samples the shape at any point: the closest point of the path, then the section. */
+    static final class Probe {
+        private final Path path;
+        private final Options o;
+        private final Sections.Section section;
+        private final double[] radius;
+        private final double[] w;
+        private final double[] roll;
+        private final int n;
+        private final int stride;
+        private final double length;
+        private final double step;
+
+        Probe(Path path, Options o, Sections.Section section, double[] radius, double[] w, double[] roll, int stride) {
+            this.path = path;
+            this.o = o;
+            this.section = section;
+            this.radius = radius;
+            this.w = w;
+            this.roll = roll;
+            this.n = path.size();
+            this.stride = stride;
+            this.length = path.length();
+            this.step = path.step();
+        }
+
+        /** The section value at this point (0 outside), near the path sample {@code c}; fills {@code local}. */
+        double eval(double qx, double qy, double qz, int c, Local local) {
             int from = Math.max(0, c - stride - 1);
             int to = Math.min(n - 1, c + stride + 1);
             int best = c;
@@ -294,7 +399,7 @@ public final class Sweep {
                     default -> k = 0;
                 }
                 if (k <= 0.02) {
-                    continue;
+                    return 0;
                 }
                 u /= k;
                 v /= k;
@@ -304,44 +409,19 @@ public final class Sweep {
                 if (de < 1) {
                     double k = Math.sqrt(Math.max(0, 1 - (1 - de) * (1 - de)));
                     if (k <= 0.02) {
-                        continue;
+                        return 0;
                     }
                     u /= k;
                     v /= k;
                 }
             }
             double value = section.eval(u, v, wl, t);
-            if (!(value > 0)) {
-                continue;
+            if (value > 0) {
+                local.set(u, v, wl, t, s, r, value);
+                return value;
             }
-            if (mask != null && !mask.test(x, y, z, context.view())) {
-                continue;
-            }
-            local.set(u, v, wl, t, s, r, value);
-            BlockData data = fill.at(x, y, z, local);
-            if (data == null) {
-                continue;
-            }
-            if (inside != null) {
-                inside.put(key, data);
-            } else {
-                changes.set(x, y, z, data);
-            }
+            return 0;
         }
-
-        if (inside != null) {
-            progress.phase("hollow", inside.size());
-            for (Long2ObjectOpenHashMap.Entry<BlockData> entry : inside.long2ObjectEntrySet()) {
-                progress.tick();
-                long key = entry.getLongKey();
-                if (!inside.containsKey(Keys.offset(key, 1, 0, 0)) || !inside.containsKey(Keys.offset(key, -1, 0, 0))
-                        || !inside.containsKey(Keys.offset(key, 0, 1, 0)) || !inside.containsKey(Keys.offset(key, 0, -1, 0))
-                        || !inside.containsKey(Keys.offset(key, 0, 0, 1)) || !inside.containsKey(Keys.offset(key, 0, 0, -1))) {
-                    changes.set(key, entry.getValue());
-                }
-            }
-        }
-        return changes;
     }
 
     private static double lerp(double a, double b, double f) {

@@ -691,46 +691,29 @@ public final class Sections {
      * noise may eat the whole radius (1) or only the skin (0.2). The value follows the depth:
      * the first block of the palette at the bottom, the last at the surface.
      *
-     * @param custom an expression of x, y, z (the section), n (the noise), d (the depth), r, t,
-     *               replacing this computation; or {@code null}
+     * <p>Without {@code custom}, the computation is the ezEdits one, so their commands give the same
+     * shapes.</p>
+     *
+     * @param custom an expression of x, y, z (the section), n (the noise), d (the depth), r, t, and
+     *               xx, yy, zz (the squares), replacing this computation; or {@code null}
      */
     public static Section noise(NoiseSpec spec, double depth, String custom) {
         double d = Math.max(0.01, depth);
-        if (custom != null) {
-            Expression expression = Expression.compile(custom, "x", "y", "z", "n", "d", "r", "t");
-            ThreadLocal<Expression.Frame> frames = ThreadLocal.withInitial(expression::frame);
-            return new Section() {
-                @Override
-                public double eval(double u, double v, double w, double t) {
-                    double r = Math.sqrt(u * u + v * v);
-                    double value = expression.run(frames.get().inputs(u, v, w, spec.sample(u, v, w), d, r, t));
-                    return value > 0 ? Math.min(1, value) : 0;
-                }
-
-                @Override
-                public double reach() {
-                    return 1.2;
-                }
-
-                @Override
-                public boolean valued() {
-                    return true;
-                }
-            };
-        }
+        Expression expression = Expression.compile(custom != null ? custom : NOISE_DEFAULT,
+                "x", "y", "z", "n", "d", "r", "t", "xx", "yy", "zz");
+        ThreadLocal<Expression.Frame> frames = ThreadLocal.withInitial(expression::frame);
         return new Section() {
             @Override
             public double eval(double u, double v, double w, double t) {
                 double r = Math.sqrt(u * u + v * v);
-                if (r > 1) {
-                    return 0;
-                }
-                double n = spec.sample(u, v, w);
-                double surface = 1 - Math.min(d, 1.5) * (1 - n);
-                if (r > surface) {
-                    return 0;
-                }
-                return Math.max(0.001, Math.min(1, 1 - (1 - r) / Math.min(d, 1)));
+                double value = expression.run(frames.get().inputs(u, v, w, spec.sample(u, v, w), d, r, t,
+                        u * u, v * v, w * w));
+                return value > 0 ? Math.min(1, value) : 0;
+            }
+
+            @Override
+            public double reach() {
+                return 1.2;
             }
 
             @Override
@@ -740,13 +723,18 @@ public final class Sections {
         };
     }
 
+    /** The ezEdits noise spline: the noise eats the tube down to the depth, the value follows the depth. */
+    static final String NOISE_DEFAULT = "r=sqrt(x*x+y*y);t=(r-1)/d+1;f=r>1?1:(4*r*(r-1))^2;g=f*t+(1-f)*n;"
+            + "p=max((r-1)/min(d,1)+1,.001);(g>t)*p";
+
     /**
      * An expression: x and y the section (-1 to 1), z along the path (in radii, or -1 to 1 with
      * {@code normalized}), and t, s, r, a, radius. Positive, it places a block; its value picks
      * it in the palette.
      */
     public static Section expression(String source, boolean normalized, double reach, double length) {
-        Expression expression = Expression.compile(source, "x", "y", "z", "t", "s", "r", "a", "radius");
+        Expression expression = Expression.compile(source, "x", "y", "z", "t", "s", "r", "a", "radius",
+                "xx", "yy", "zz");
         ThreadLocal<Expression.Frame> frames = ThreadLocal.withInitial(expression::frame);
         return new Section() {
             @Override
@@ -754,7 +742,8 @@ public final class Sections {
                 double z = normalized ? t * 2 - 1 : w;
                 double r = Math.sqrt(u * u + v * v);
                 double a = Math.atan2(v, u);
-                double value = expression.run(frames.get().inputs(u, v, z, t, t * length, r, a < 0 ? a + TAU : a, 1));
+                double value = expression.run(frames.get().inputs(u, v, z, t, t * length, r, a < 0 ? a + TAU : a, 1,
+                        u * u, v * v, z * z));
                 return value > 0 ? value : 0;
             }
 

@@ -85,7 +85,11 @@ public final class ChangeSet {
         }
         blocks.put(key, data);
         params.remove(key);
-        if (NamedMarkers.is(data)) {
+        Map<String, String> carried = NamedMarkers.carried(data);
+        if (carried != null) {
+            params.put(key, carried);
+            named.remove(key);
+        } else if (NamedMarkers.is(data)) {
             named.add(key);
         } else {
             named.remove(key);

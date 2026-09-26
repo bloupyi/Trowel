@@ -134,6 +134,7 @@ The **direction** is `me` (where you look, the default), `up`, `down`, `north`, 
 |--------|--------|
 | `stone`, `oak_slab[type=top]` | A block, with its state |
 | `60%stone,40%andesite` | A weighted random draw |
+| `251:8` | A numeric block id from before 1.13, as in ezEdits (here light gray concrete) |
 | `checkpoint` | A host marker by name (when the host plugin provides markers): it becomes a real marker |
 | `#hand`, `#hotbar`, `#aim` | The held block, your hotbar (weighted by amounts), the aimed block |
 | `##magma` | A ready-made palette, at random |
@@ -325,6 +326,7 @@ Without points, the spline goes from corner 1 to corner 2.
 | `-q fast\|balanced\|high\|exact` | Quality |
 | `-p tension:bias:continuity` | The curve between the points (-1 to 1) |
 | `-h`, `-c`, `-m <mask>` | Hollow, closed loop, what it may replace |
+| `-w <profile>` | Shaping blocks on the surface, like ezEdits smoothblocks: `Slabs`, `SlabsAndStairs`, `SlabsAndStairs2D`, `Panes`, `Layers`. Options: `Slabs(Slab:acacia,Coverage:0.3)` |
 
 ### Shapes
 
@@ -344,7 +346,7 @@ details them.
 
 | Shape | Effect |
 |-------|--------|
-| `//spline noise <palette> [radii] [noise] [depth]` | A noise eats the tube; the palette goes from the bottom to the surface |
+| `//spline noise <palette> [radii] [noise] [depth] [-i expression]` | A noise eats the tube; the palette goes from the bottom to the surface. Same formula as ezEdits; `-i` replaces it (x, y, z, n, d, r, t, and xx, yy, zz the squares) |
 | `//spline expr <palette> [radii] <expression>` | Your own shape: x, y the cut (-1 to 1), z along the path |
 | `//spline clipboard [radii] [-z]` | The clipboard repeated along the path (stretched with `-z`) |
 
@@ -528,7 +530,7 @@ top view, shown on hover.
 
 | Command | Effect |
 |---------|--------|
-| `//schem save <name> [-p]` | Saves the clipboard (`-p`: private) |
+| `//schem save <name> [-p] [-c]` | Saves the current selection (`-c`: the clipboard instead, `-p`: private) |
 | `//schem load <name>` | Loads it back into the clipboard, then `//paste` |
 | `//schem list [search\|page]` | The library, click to load |
 | `//schem info <name>`, `//schem delete <name>` | Thumbnail and details; delete (author only) |
@@ -578,7 +580,7 @@ the one in hand. A gradient in a brush: pattern `#gradient[##magma][y]`.
 | `//undo brush` | Undoes the last gesture of the brush in hand, even if others followed |
 | `//cancel` | Stops the running operation |
 | `//markers [protect\|edit]` | Protects (default) or not the markers |
-| `//coedit [show\|share] [on\|off]` | See the selection of other builders in the same world, show yours |
+| `//coedit [show\|share] [on\|off]` | See the selection of other builders in the same world while they hold a Trowel tool (off by default), show yours (on by default) |
 | `//axiom` | State of the Axiom support for you |
 
 - **Computing runs in the background**, only placing runs on the server thread. A **subtitle**

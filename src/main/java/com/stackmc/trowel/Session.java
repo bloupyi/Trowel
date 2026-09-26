@@ -17,8 +17,8 @@ import java.util.Deque;
 public final class Session {
 
     private boolean busy;
-    /** Co-editing: see the selection and cursor of the other builders in the same world. */
-    private boolean coeditShow = true;
+    /** Co-editing: see the selection and cursor of the other builders in the same world (off until asked). */
+    private boolean coeditShow;
     /** Co-editing: show ours to the others. */
     private boolean coeditShare = true;
     /** Progress of the running operation, for //cancel; {@code null} when idle. */

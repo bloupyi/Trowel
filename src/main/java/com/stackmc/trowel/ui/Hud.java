@@ -110,7 +110,8 @@ public final class Hud {
             }
             for (Player shown : builders) {
                 Session theirs = trowel.existingSession(shown);
-                if (theirs == null || !theirs.isCoeditShare()) {
+                if (theirs == null || !theirs.isCoeditShare()
+                        || trowel.items().kind(shown.getInventory().getItemInMainHand()) == null) {
                     continue;
                 }
                 Particle.DustOptions color = colorFor(shown);
@@ -121,7 +122,7 @@ public final class Hud {
                         continue;
                     }
                     Session mine = trowel.existingSession(viewer);
-                    if (mine != null && !mine.isCoeditShow()) {
+                    if (mine == null || !mine.isCoeditShow()) {
                         continue;
                     }
                     if (selection != null && selection.volume() <= 2_000_000L) {

@@ -257,7 +257,8 @@ public final class Patterns {
         int ox = (int) o[0];
         int oy = (int) o[1];
         int oz = (int) o[2];
-        return (x, y, z) -> clipboard.tiled(x - ox, y - oy, z - oz);
+        Clipboard carrying = clipboard.withCarriedMarkers();
+        return (x, y, z) -> carrying.tiled(x - ox, y - oy, z - oz);
     }
 
     private static double[] vector(String raw) {
@@ -277,6 +278,35 @@ public final class Patterns {
         return Palette.parse(raw, context.markers());
     }
 
+    private static final java.util.regex.Pattern LEGACY_ID = java.util.regex.Pattern.compile("\\d{1,3}(:\\d{1,2})?");
+    private static volatile Map<Integer, Material> legacyIds;
+
+    /** A numeric block id from before 1.13, as ezEdits still accepts it: {@code 251:8} is light gray concrete. */
+    private static BlockData legacy(String token) {
+        Map<Integer, Material> ids = legacyIds;
+        if (ids == null) {
+            Map<Integer, Material> built = new java.util.HashMap<>();
+            for (Material material : Material.values()) {
+                if (material.isLegacy() && material.isBlock()) {
+                    built.putIfAbsent(material.getId(), material);
+                }
+            }
+            legacyIds = ids = built;
+        }
+        int colon = token.indexOf(':');
+        int id = Integer.parseInt(colon < 0 ? token : token.substring(0, colon));
+        int data = colon < 0 ? 0 : Integer.parseInt(token.substring(colon + 1));
+        Material material = ids.get(id);
+        if (material == null || data > 15) {
+            throw new IllegalArgumentException("Unknown block id: " + token);
+        }
+        BlockData block = Bukkit.getUnsafe().fromLegacy(material, (byte) data);
+        if (block == null || block.getMaterial().isAir() && id != 0) {
+            throw new IllegalArgumentException("Unknown block id: " + token);
+        }
+        return block;
+    }
+
     /** A single block, or a marker by name. */
     public static BlockData block(String token, MarkerSupport markers) {
         String name = token.trim();
@@ -287,6 +317,9 @@ public final class Patterns {
         Material marker = markers.resolve(lower);
         if (marker != null) {
             return NamedMarkers.of(marker);
+        }
+        if (LEGACY_ID.matcher(lower).matches()) {
+            return legacy(lower);
         }
         try {
             BlockData data = Bukkit.createBlockData(lower);

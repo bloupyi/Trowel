@@ -41,9 +41,9 @@ final class LibraryCommands {
     }
 
     void define() {
-        c.add("schem|schematic|lib", LIBRARY, "//schem <save|load|list|info|delete> [name] [-p]",
-                "The shared library: save stores the clipboard (-p: private), load brings it back, "
-                        + "list shows the thumbnails.", this::schem,
+        c.add("schem|schematic|lib", LIBRARY, "//schem <save|load|list|info|delete> [name] [-p] [-c]",
+                "The shared library: save stores the selection (-c: the clipboard instead, -p: private), "
+                        + "load brings it back, list shows the thumbnails.", this::schem,
                 (player, args) -> args.length == 1
                         ? Commands.filter(List.of("save", "load", "list", "info", "delete"), args[0])
                         : args.length == 2 && !args[0].equalsIgnoreCase("save")
@@ -73,19 +73,39 @@ final class LibraryCommands {
                 if (!SchematicLibrary.validName(name)) {
                     throw new IllegalArgumentException("Name: lowercase letters, digits, _ and -, 32 at most.");
                 }
+                boolean shared = !Commands.flags(args).contains("p");
+                java.util.function.Consumer<Clipboard> store = clipboard -> library.save(player.getUniqueId(),
+                        player.getName(), admin, name, clipboard, shared, error -> {
+                            if (error != null) {
+                                Chat.error(player, "Saving: " + error);
+                                return;
+                            }
+                            Chat.info(player, "Schematic saved: ", name + " " + clipboard.size()
+                                    + (shared ? " (shared)" : " (private)"));
+                            info(player, library.find(name));
+                        });
+                Box selection = trowel.selection(player);
+                if (selection != null && !Commands.flags(args).contains("c")) {
+                    if (selection.volume() > trowel.settings().maxBlocks()) {
+                        throw new IllegalArgumentException("Selection too large: " + selection.volume()
+                                + " blocks, the maximum is " + trowel.settings().maxBlocks() + ".");
+                    }
+                    org.bukkit.World world = player.getWorld();
+                    org.bukkit.block.Block origin = Commands.feet(player);
+                    trowel.engine().read(player, world, selection, "Copy",
+                            context -> Clipboard.copy(context, selection, world.getUID(), origin.getX(), origin.getY(),
+                                    origin.getZ()),
+                            clipboard -> {
+                                trowel.session(player).setClipboard(clipboard);
+                                store.accept(clipboard);
+                            });
+                    return;
+                }
                 Clipboard clipboard = trowel.session(player).getClipboard();
                 if (clipboard == null) {
-                    throw new IllegalArgumentException("Empty clipboard: //copy first.");
+                    throw new IllegalArgumentException("Nothing to save: select an area, or //copy first.");
                 }
-                boolean shared = !Commands.flags(args).contains("p");
-                library.save(player.getUniqueId(), player.getName(), admin, name, clipboard, shared, error -> {
-                    if (error != null) {
-                        Chat.error(player, "Saving: " + error);
-                        return;
-                    }
-                    Chat.info(player, "Schematic saved: ", name + (shared ? " (shared)" : " (private)"));
-                    info(player, library.find(name));
-                });
+                store.accept(clipboard);
             }
             case "load" -> {
                 String name = Commands.need(plain, 1, "//schem load <name>");

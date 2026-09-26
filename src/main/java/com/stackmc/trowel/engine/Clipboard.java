@@ -180,6 +180,21 @@ public final class Clipboard {
         return cells.get(Keys.pack(dx, dy, dz));
     }
 
+    /** The same clipboard where each marker block carries its settings, for patterns that place it. */
+    public Clipboard withCarriedMarkers() {
+        if (params.isEmpty()) {
+            return this;
+        }
+        Long2ObjectOpenHashMap<BlockData> carrying = new Long2ObjectOpenHashMap<>(cells);
+        for (Long2ObjectMap.Entry<Map<String, String>> entry : params.long2ObjectEntrySet()) {
+            BlockData data = cells.get(entry.getLongKey());
+            if (data != null) {
+                carrying.put(entry.getLongKey(), NamedMarkers.carrying(data, entry.getValue()));
+            }
+        }
+        return new Clipboard(carrying, params, bounds, world, originX, originY, originZ);
+    }
+
     /** The clipboard repeated forever, like tiling: for the {@code #clipboard} pattern. */
     public BlockData tiled(int x, int y, int z) {
         int dx = bounds.minX() + Math.floorMod(x, bounds.width());
