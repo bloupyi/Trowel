@@ -63,6 +63,7 @@ public final class Hud {
     private final Trowel trowel;
     private final Map<UUID, Flash> flashes = new HashMap<>();
     private BukkitTask task;
+    private int ticks;
 
     private record Flash(UUID world, Box box, int until) {
     }
@@ -98,8 +99,9 @@ public final class Hud {
      * Co-editing: everyone sees, in the other's color, the selection and aimed block of the
      * other builders in the same world. Each chooses to see and to show (G menu, Settings).
      */
-    private void drawOthers(int now) {
-        if (now % 6 != 0) {
+    private void drawOthers() {
+        // Every other run: the task runs every PERIOD ticks from a start tick that is not always a multiple of it.
+        if (ticks++ % 2 != 0) {
             return;
         }
         Map<java.util.UUID, List<Player>> byWorld = new HashMap<>();
@@ -114,13 +116,13 @@ public final class Hud {
             }
             for (Player shown : builders) {
                 Session theirs = trowel.existingSession(shown);
-                if (theirs == null || !theirs.isCoeditShare()
-                        || trowel.items().kind(shown.getInventory().getItemInMainHand()) == null) {
+                if (theirs == null || !theirs.isCoeditShare()) {
                     continue;
                 }
                 Particle.DustOptions color = colorFor(shown);
                 Box selection = theirs.selection(shown.getWorld());
-                Block aimed = shown.getTargetBlockExact(trowel.settings().reach());
+                Block aimed = trowel.items().kind(shown.getInventory().getItemInMainHand()) == null ? null
+                        : shown.getTargetBlockExact(trowel.settings().reach());
                 for (Player viewer : builders) {
                     if (viewer.equals(shown)) {
                         continue;
@@ -150,7 +152,7 @@ public final class Hud {
 
     private void tick() {
         int now = Bukkit.getCurrentTick();
-        drawOthers(now);
+        drawOthers();
         for (Player player : Bukkit.getOnlinePlayers()) {
             Flash flash = flashes.get(player.getUniqueId());
             if (flash != null && flash.until() < now) {
