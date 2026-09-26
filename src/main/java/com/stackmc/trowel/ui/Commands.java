@@ -500,6 +500,14 @@ public final class Commands {
                     Chat.info(p, edit ? "Operations can now replace markers."
                             : "Markers are protected: only copy, paste and move touch them.");
                 }, args("word:protect|edit"));
+        add("noclip|nc", SETTINGS, "//noclip [on|off]",
+                "Walk and fly through blocks in creative: spectator while a block is in the way, creative again once out.",
+                (p, a) -> {
+                    Session session = trowel.session(p);
+                    session.setNoclip(a.length == 0 ? !session.isNoclip() : a[0].equalsIgnoreCase("on"));
+                    Chat.info(p, session.isNoclip() ? "Noclip on: walk or fly into a block to pass through it."
+                            : "Noclip off.");
+                }, args("word:on|off"));
         add("axiom", SETTINGS, "//axiom", "State of the Axiom compatibility for you.", (p, a) -> axiomStatus(p), null);
         add("coedit|coop", SETTINGS, "//coedit [show|share] [on|off]",
                 "Co-editing: see the selection and aimed block of the other builders in the same world (show), show yours (share).",
@@ -875,7 +883,7 @@ public final class Commands {
             throw new IllegalArgumentException("Empty clipboard: //copy first.");
         }
         session.setClipboard(session.getClipboard().transformed(transform, trowel.host().markers(),
-                trowel.transforms(), trowel.air()));
+                trowel.transforms()));
         Chat.info(player, done + " Clipboard: ", session.getClipboard().size());
     }
 

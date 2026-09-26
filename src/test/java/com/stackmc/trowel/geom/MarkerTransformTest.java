@@ -59,10 +59,11 @@ class MarkerTransformTest {
     }
 
     @Test
-    @DisplayName("A rotated zone starts again from its new most negative corner")
+    @DisplayName("A rotated zone keeps its block and covers the same blocks with signed sizes")
     void corner() {
-        assertArrayEquals(new int[]{-1, 0, 0}, MarkerTransform.corner(0, 0, 0, 3, 1, 2, Transform.ROTATE_90));
-        assertArrayEquals(new int[]{-2, 5, -1}, MarkerTransform.corner(0, 5, 0, 3, 1, 2, Transform.ROTATE_180));
-        assertArrayEquals(new int[]{4, 0, 0}, MarkerTransform.corner(4, 0, 0, 1, 1, 1, Transform.FLIP_Y));
+        assertArrayEquals(new int[]{-2, 1, 3}, MarkerTransform.spans(0, 0, 0, 3, 1, 2, Transform.ROTATE_90));
+        assertArrayEquals(new int[]{-3, 1, -2}, MarkerTransform.spans(0, 5, 0, 3, 1, 2, Transform.ROTATE_180));
+        assertArrayEquals(new int[]{3, 1, 2}, MarkerTransform.spans(0, 5, 0, -3, 1, -2, Transform.ROTATE_180));
+        assertArrayEquals(new int[]{1, 1, 1}, MarkerTransform.spans(4, 0, 0, 1, 1, 1, Transform.FLIP_Y));
     }
 }

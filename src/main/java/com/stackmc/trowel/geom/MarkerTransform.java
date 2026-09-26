@@ -9,9 +9,9 @@ import java.util.Map;
 /**
  * The settings of a marker, rotated with it.
  *
- * <p>A zone extends from its block towards positive X, Y and Z. Rotated, it covers another
- * rectangle whose most negative corner is no longer at the block: {@link #corner}
- * says where to put it back so it still covers the same blocks.</p>
+ * <p>A zone extends from its block towards positive X, Y and Z, or towards negative ones for a
+ * negative size. Rotated, the block stays where it lands and {@link #spans} gives the signed sizes
+ * that cover the same blocks.</p>
  */
 public final class MarkerTransform {
 
@@ -99,10 +99,18 @@ public final class MarkerTransform {
         return out.toString();
     }
 
-    /** Most negative corner, once rotated, of a w x h x d zone starting at (x, y, z). */
-    public static int[] corner(int x, int y, int z, int w, int h, int d, Transform t) {
+    /** Signed sizes, once rotated, of a zone of signed sizes w, h, d anchored at (x, y, z). */
+    public static int[] spans(int x, int y, int z, int w, int h, int d, Transform t) {
         int[] a = t.apply(x, y, z);
-        int[] b = t.apply(x + w - 1, y + h - 1, z + d - 1);
-        return new int[]{Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])};
+        int[] b = t.apply(x + reach(w), y + reach(h), z + reach(d));
+        return new int[]{span(b[0] - a[0]), span(b[1] - a[1]), span(b[2] - a[2])};
+    }
+
+    private static int reach(int size) {
+        return size > 0 ? size - 1 : size + 1;
+    }
+
+    private static int span(int delta) {
+        return delta >= 0 ? delta + 1 : delta - 1;
     }
 }

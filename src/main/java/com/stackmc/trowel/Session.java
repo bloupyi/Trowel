@@ -40,6 +40,8 @@ public final class Session {
     private String globalMask;
     /** {@code false}: operations never replace a marker. */
     private boolean editMarkers;
+    /** Walk and fly through blocks in creative. */
+    private boolean noclip;
 
     private String lastPattern = "stone";
     private String lastMask = "";

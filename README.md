@@ -580,6 +580,7 @@ the one in hand. A gradient in a brush: pattern `#gradient[##magma][y]`.
 | `//undo brush` | Undoes the last gesture of the brush in hand, even if others followed |
 | `//cancel` | Stops the running operation |
 | `//markers [protect\|edit]` | Protects (default) or not the markers |
+| `//noclip [on\|off]` | Walk and fly through blocks in creative: spectator while a block is in the way, creative again once out |
 | `//coedit [show\|share] [on\|off]` | See the selection of other builders in the same world while they hold a Trowel tool (off by default), show yours (on by default) |
 | `//axiom` | State of the Axiom support for you |
 

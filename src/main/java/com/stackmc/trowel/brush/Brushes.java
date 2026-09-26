@@ -150,7 +150,7 @@ public final class Brushes {
                 if (s.random()) {
                     Transform turn = Transform.rotation(90 * ThreadLocalRandom.current().nextInt(4));
                     if (turn != null) {
-                        placed = placed.transformed(turn, context.markers(), context.transforms(), context.air());
+                        placed = placed.transformed(turn, context.markers(), context.transforms());
                     }
                 }
                 placed.pasteInto(stroke.changes, context.markers(), x + face.getModX(), y + face.getModY(),

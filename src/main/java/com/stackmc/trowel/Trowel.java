@@ -17,6 +17,7 @@ import com.stackmc.trowel.pattern.Patterns;
 import com.stackmc.trowel.ui.Commands;
 import com.stackmc.trowel.ui.Dialogs;
 import com.stackmc.trowel.ui.Hud;
+import com.stackmc.trowel.ui.NoClip;
 import com.stackmc.trowel.ui.PaletteEditor;
 import com.stackmc.trowel.ui.ToolListener;
 import io.papermc.paper.dialog.Dialog;
@@ -66,6 +67,7 @@ public final class Trowel implements TrowelApi {
     private Engine engine;
     private TrowelItems items;
     private Hud hud;
+    private NoClip noclip;
     private Dialogs dialogs;
     private Commands commands;
     private AxiomBridge axiom;
@@ -114,6 +116,8 @@ public final class Trowel implements TrowelApi {
         listeners.forEach(listener -> plugin.getServer().getPluginManager().registerEvents(listener, plugin));
         commands.register();
         hud.start();
+        noclip = new NoClip(this);
+        noclip.start();
         checkQuickActions();
         axiom = new AxiomBridge(this);
         axiom.enable();
@@ -142,6 +146,9 @@ public final class Trowel implements TrowelApi {
         if (hud != null) {
             hud.stop();
         }
+        if (noclip != null) {
+            noclip.stop();
+        }
         if (axiom != null) {
             axiom.disable();
         }
@@ -164,6 +171,9 @@ public final class Trowel implements TrowelApi {
     }
 
     public void forget(Player player) {
+        if (noclip != null) {
+            noclip.forget(player);
+        }
         sessions.remove(player.getUniqueId());
         if (hud != null) {
             hud.forget(player);

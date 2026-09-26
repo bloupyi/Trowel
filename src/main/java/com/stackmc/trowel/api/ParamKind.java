@@ -13,7 +13,7 @@ public enum ParamKind {
     PATH,
     /** A direction: {@code north}, {@code up}... */
     DIRECTION,
-    /** Extent of the zone along X, from the block. */
+    /** Extent of the zone along X, from the block; negative towards negative X. */
     SIZE_X,
     SIZE_Y,
     SIZE_Z

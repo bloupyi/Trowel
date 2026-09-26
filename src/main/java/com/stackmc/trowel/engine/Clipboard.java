@@ -80,11 +80,10 @@ public final class Clipboard {
     /**
      * The same clipboard, rotated or flipped around the origin.
      *
-     * <p>A marker zone extends from its block towards positive coordinates: once rotated, its
-     * block moves to the new most negative corner so it still covers the same blocks, and its
-     * settings (direction, facing, path, width and depth) rotate with it.</p>
+     * <p>A marker keeps its block; its zone sizes become signed so it still covers the same
+     * blocks, and its settings (direction, facing, path, width and depth) rotate with it.</p>
      */
-    public Clipboard transformed(Transform transform, MarkerSupport markers, BlockTransforms blocks, BlockData air) {
+    public Clipboard transformed(Transform transform, MarkerSupport markers, BlockTransforms blocks) {
         Long2ObjectOpenHashMap<BlockData> turned = new Long2ObjectOpenHashMap<>(cells.size());
         for (Long2ObjectMap.Entry<BlockData> entry : cells.long2ObjectEntrySet()) {
             long key = entry.getLongKey();
@@ -126,14 +125,19 @@ public final class Clipboard {
             int w = size(effective, kinds, ParamKind.SIZE_X);
             int h = size(effective, kinds, ParamKind.SIZE_Y);
             int d = size(effective, kinds, ParamKind.SIZE_Z);
-            if (w > 1 || h > 1 || d > 1) {
-                int[] corner = MarkerTransform.corner(x, y, z, w, h, d, transform);
-                long moved = Keys.pack(corner[0], corner[1], corner[2]);
-                if (moved != target) {
-                    BlockData marker = turned.get(target);
-                    turned.put(target, air);
-                    turned.put(moved, marker);
-                    target = moved;
+            if (w != 1 || h != 1 || d != 1) {
+                int[] spans = MarkerTransform.spans(x, y, z, w, h, d, transform);
+                ParamKind[] axes = {ParamKind.SIZE_X, ParamKind.SIZE_Y, ParamKind.SIZE_Z};
+                for (int axis = 0; axis < 3; axis++) {
+                    for (Map.Entry<String, ParamKind> kind : kinds.entrySet()) {
+                        if (kind.getValue() == axes[axis]) {
+                            if (spans[axis] == 1 && !values.containsKey(kind.getKey())) {
+                                kept.remove(kind.getKey());
+                            } else {
+                                kept.put(kind.getKey(), String.valueOf(spans[axis]));
+                            }
+                        }
+                    }
                 }
             }
             turnedParams.put(target, kept);
@@ -149,7 +153,8 @@ public final class Clipboard {
         for (Map.Entry<String, ParamKind> entry : kinds.entrySet()) {
             if (entry.getValue() == axis) {
                 try {
-                    return Math.max(1, Integer.parseInt(values.getOrDefault(entry.getKey(), "1").trim()));
+                    int size = Integer.parseInt(values.getOrDefault(entry.getKey(), "1").trim());
+                    return size == 0 ? 1 : size;
                 } catch (NumberFormatException e) {
                     return 1;
                 }
