@@ -6,6 +6,7 @@ import com.stackmc.trowel.Trowel;
 import com.stackmc.trowel.TrowelItems;
 import com.stackmc.trowel.api.Box;
 import com.stackmc.trowel.brush.BrushSettings;
+import com.stackmc.trowel.brush.BrushType;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
@@ -134,6 +135,13 @@ public final class ToolListener implements Listener {
         }
         if (event.getAction() == Action.LEFT_CLICK_AIR || event.getAction() == Action.LEFT_CLICK_BLOCK) {
             trowel.dialogs().openBrush(player);
+            return;
+        }
+        if (settings.type() == BrushType.LOFT) {
+            if (player.isSneaking()) {
+                trowel.commands().execute(player, "loft frame");
+            }
+            trowel.commands().execute(player, "loft point");
             return;
         }
 

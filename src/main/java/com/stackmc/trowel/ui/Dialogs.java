@@ -942,6 +942,17 @@ public final class Dialogs implements Listener {
         if (type.uses(BrushType.Setting.RANDOM)) {
             screen.toggle("random", type.label(BrushType.Setting.RANDOM), current.random());
         }
+        if (type == BrushType.LOFT) {
+            screen.line(trowel.session(player).getFrames().size() + " frame(s).");
+            screen.act("Stretch", "//loft set with this pattern", (in, who) -> {
+                BrushSettings read = read(in, current);
+                if (store(who, slot, read)) {
+                    trowel.commands().execute(who, "loft set " + read.pattern());
+                }
+            })
+                    .act("Remove last point", "//loft remove", (in, who) -> trowel.commands().execute(who, "loft remove"))
+                    .act("Clear", "//loft clear", (in, who) -> trowel.commands().execute(who, "loft clear"));
+        }
         screen.act("Apply", "Keep these settings", (in, who) -> store(who, slot, read(in, current)))
                 .act("Pattern = my hotbar", "The blocks of your hotbar, weighted by their amount", (in, who) -> {
                     String hotbar = Patterns.hotbar(who);

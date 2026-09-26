@@ -91,7 +91,10 @@ public enum BrushType {
     CRACKS("Cracks", Material.CRACKED_STONE_BRICKS, "Cracks winding over the surface.", "Depth",
             SIZE, HEIGHT, ITERATIONS, PATTERN, MASK),
     SCREE("Scree", Material.GRAVEL, "Stones rolling down slopes and piling up at the bottom.", null,
-            SIZE, INTENSITY, PATTERN, MASK);
+            SIZE, INTENSITY, PATTERN, MASK),
+    LOFT("Loft", Material.STRING, "Right click adds the aimed block to the loft frame, sneak opens a new frame. "
+            + "Left click to stretch the surface.", null,
+            PATTERN);
 
     public enum Setting { SIZE, HEIGHT, INTENSITY, CHANCE, FALLOFF, ITERATIONS, PRESET, PROFILE, NOISE, PATTERN, MASK,
         SURFACE, RANDOM }
@@ -160,6 +163,7 @@ public enum BrushType {
             case "dripstone", "stalagmite" -> STALACTITE;
             case "crack", "fissure" -> CRACKS;
             case "talus", "rubble" -> SCREE;
+            case "hull", "vault" -> LOFT;
             default -> null;
         };
     }
