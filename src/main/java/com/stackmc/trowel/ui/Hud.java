@@ -5,6 +5,7 @@ import com.stackmc.trowel.Trowel;
 import com.stackmc.trowel.TrowelItems;
 import com.stackmc.trowel.api.Box;
 import com.stackmc.trowel.brush.BrushSettings;
+import com.stackmc.trowel.brush.BrushType;
 import com.stackmc.trowel.engine.BlockView;
 import com.stackmc.trowel.engine.Clipboard;
 import com.stackmc.trowel.engine.Terrain;
@@ -248,6 +249,9 @@ public final class Hud {
     // -------------------------------------------------------------------- brush
 
     private void preview(Player player, BrushSettings s, Session session) {
+        if (s.type() == BrushType.LOFT) {
+            return;
+        }
         RayTraceResult hit = player.rayTraceBlocks(trowel.settings().reach(), FluidCollisionMode.NEVER);
         if (hit == null || hit.getHitBlock() == null) {
             return;
@@ -345,7 +349,7 @@ public final class Hud {
             case RAISE -> dust(120, 255, 170, 0.8f);
             case LOWER, ERODE -> dust(255, 110, 110, 0.8f);
             case FLATTEN -> dust(255, 220, 90, 0.8f);
-            case STAMP -> dust(255, 255, 255, 0.8f);
+            case STAMP, LOFT -> dust(255, 255, 255, 0.8f);
             case SPIKE -> dust(190, 120, 255, 0.8f);
             case BLOB, BOULDER -> dust(170, 140, 110, 0.8f);
             case BUCKET -> dust(90, 200, 255, 0.8f);

@@ -563,6 +563,7 @@ A brush is an item that keeps its settings. `//brushes` (or the Brushes window) 
 | Stalactites | Under ceilings, and more rarely stalagmites; in `pointed_dripstone`, the thickness follows the real game |
 | Cracks | Cracks winding over the surface, carved (`air`) or repainted, to the chosen depth |
 | Scree | Stones rolling down slopes and piling up at the bottom |
+| Loft | Right click adds the aimed block to the loft frame, sneak opens a new frame; left click to stretch the surface |
 
 `//brush <type> [radius] [pattern]` gives a brush; `//brush size|mask|pattern|type <value>` tunes
 the one in hand. A gradient in a brush: pattern `#gradient[##magma][y]`.
