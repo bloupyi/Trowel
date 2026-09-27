@@ -86,9 +86,9 @@ final class LibraryCommands {
                         });
                 Box selection = trowel.selection(player);
                 if (selection != null && !Commands.flags(args).contains("c")) {
-                    if (selection.volume() > trowel.settings().maxBlocks()) {
+                    if (selection.volume() > trowel.settings().maxBlocks(player)) {
                         throw new IllegalArgumentException("Selection too large: " + selection.volume()
-                                + " blocks, the maximum is " + trowel.settings().maxBlocks() + ".");
+                                + " blocks, the maximum is " + trowel.settings().maxBlocks(player) + ".");
                     }
                     org.bukkit.World world = player.getWorld();
                     org.bukkit.block.Block origin = Commands.feet(player);

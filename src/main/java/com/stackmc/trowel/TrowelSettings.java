@@ -2,6 +2,7 @@ package com.stackmc.trowel;
 
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.permissions.Permissible;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -40,6 +41,17 @@ public record TrowelSettings(int maxBlocks, int blocksPerTick, int undoSteps, in
                 wand == null || wand.isBlock() ? Material.WOODEN_AXE : wand,
                 yaml.getBoolean("axiom.enabled", true),
                 yaml.getString("axiom.permission", "axiom.default"));
+    }
+
+    /** Lets a player go past {@code max-blocks} and {@code max-chunks}. */
+    public static final String BYPASS_LIMIT = "trowel.bypass.limit";
+
+    public int maxBlocks(Permissible who) {
+        return who.hasPermission(BYPASS_LIMIT) ? Integer.MAX_VALUE : maxBlocks;
+    }
+
+    public int maxChunks(Permissible who) {
+        return who.hasPermission(BYPASS_LIMIT) ? Integer.MAX_VALUE : maxChunks;
     }
 
     private static int clamp(int value, int min, int max) {
