@@ -480,7 +480,8 @@ public final class Commands {
         add("brushes", BRUSHES, "//brushes", "Pick a brush from the list.",
                 (p, a) -> trowel.dialogs().openKit(p, false), null);
 
-        add("gmask", SETTINGS, "//gmask [mask]", "Mask applied to everything; without an argument, it is removed.", (p, a) -> {
+        add("gmask", SETTINGS, "//gmask [mask]",
+                "Mask applied to everything (#hand: the block held now); without an argument, it is removed.", (p, a) -> {
             Session session = trowel.session(p);
             if (a.length == 0) {
                 session.setGlobalMask(null);
@@ -488,6 +489,13 @@ public final class Commands {
                 return;
             }
             String raw = join(a, 0);
+            if (raw.toLowerCase(Locale.ROOT).contains("#hand")) {
+                Material held = p.getInventory().getItemInMainHand().getType();
+                if (!held.isBlock() || held.isAir()) {
+                    throw new IllegalArgumentException("#hand: hold a block.");
+                }
+                raw = raw.replaceAll("(?i)#hand", held.getKey().getKey());
+            }
             mask(p, raw);
             session.setGlobalMask(raw);
             Chat.info(p, "Global mask: ", raw);
