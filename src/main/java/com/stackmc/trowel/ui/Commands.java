@@ -75,7 +75,7 @@ public final class Commands {
     private static final String REGION = "Selection: operations";
     private static final String SHAPES = "Shapes";
     private static final String LINES = "Lines and curves";
-    private static final String NOISE = "Terrain and noise";
+    static final String NOISE = "Terrain and noise";
     private static final String NEAR = "Around me";
     private static final String CLIPBOARD = "Clipboard";
     private static final String HISTORY = "History";

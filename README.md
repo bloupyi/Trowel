@@ -424,6 +424,9 @@ With a palette, the value (0 to 1) picks the block:
 | `//carve <noise> <scale> [threshold %]` | Carves: caves, holes |
 | `//roughen <noise> [scale] [amplitude]` | Makes a relief less smooth |
 | `//scatter <pattern> [density %] [mask]` | Scatters grass and flowers |
+| `//flowfield <palette> [lines\|%] [iterations] [velocity] [palette scalar] [noise]` | Flow field, like ezEdits: lines start at random on the relief, follow the direction a noise gives and repaint the surface. Where lines cross, the palette goes one block further per pass (the scalar speeds that up). Defaults: `10%` of the columns, 32 steps, velocity 1, scalar 1, `perlin` at scale 50. Also `//flow` |
+| `//flowfield ... -i <inertia> -g <x,y,z> -m <mask>` | Inertia (0 to below 1: lines bend less), a pull added at each step, where lines may start |
+| `//flowfield ... -c -f -t` | Follows the curl of the noise (swirls), fills the untouched surface with the first block, lines through the volume in 3D |
 | `//snow`, `//thaw`, `//green` `[radius]` | Snow, thaw, grass |
 
 ---
@@ -639,7 +642,7 @@ Fill         //set  //replace  //walls  //overlay  //hollow
 Shapes       //sphere  //cyl  //cone  //pyramid  //line  //rope  //arch
 Splines      //point  //spline [shape] <pattern> [radii] [-t -r -s -e -n -q -p -h -c]
 Expressions  //generate <pattern> <expression>  //deform <expression>  //functions
-Terrain      //terrain  //heightmap  //noise  //carve  //roughen  //scatter
+Terrain      //terrain  //heightmap  //noise  //carve  //roughen  //scatter  //flowfield
 Sculpt       //smooth3d  //inflate  //surface  //voronoialize  //hexagonalize  //twist
 Textures     //texture <type> <mask> <palette>
 Arceon       //roof  //road  //river  //revolve  //resize  //shadow  //text  //loft
