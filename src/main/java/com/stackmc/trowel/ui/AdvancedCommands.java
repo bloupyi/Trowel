@@ -7,6 +7,7 @@ import com.stackmc.trowel.api.Box;
 import com.stackmc.trowel.engine.ChangeSet;
 import com.stackmc.trowel.engine.Clipboard;
 import com.stackmc.trowel.engine.Engine;
+import com.stackmc.trowel.engine.FlowField;
 import com.stackmc.trowel.engine.Progress;
 import com.stackmc.trowel.expr.Expression;
 import com.stackmc.trowel.expr.Functions;
@@ -81,6 +82,12 @@ final class AdvancedCommands {
                 "Deforms the selection: the expression changes x, y, z, and each block takes the one at the computed place.",
                 this::deform, (p, a) -> a.length == 1 ? Commands.filter(List.of("-r", "-c", "-o", "y-=0.2*sin(x*5)",
                         "x+=0.1*y", "swap=x;x=z;z=swap"), a[0]) : List.of());
+        c.add("flowfield|ezflowfield|flow", Commands.NOISE, "//flowfield <palette> [lines|%] [iterations] [velocity] "
+                        + "[palette scalar] [noise] [-i inertia] [-g x,y,z] [-m mask] [-c] [-f] [-t]",
+                "Lines follow a noise field and paint the palette where they pass, like ezEdits. -c curl, "
+                        + "-f fills the rest with the first block, -t in 3D.",
+                this::flowfield, c.args("pattern", "n:50|200|10%", "n:32|64|128", "n:1|2", "n:1|0.5|2", "noisespec",
+                        "flag:-i|-g|-m|-c|-f|-t"));
         c.add("functions|exprhelp", EXPRESSIONS, "//functions", "The functions and variables of expressions.",
                 (p, a) -> functions(p), null);
     }
@@ -594,6 +601,69 @@ final class AdvancedCommands {
         double z(int bz) {
             return (bz - cz) / sz;
         }
+    }
+
+    private void flowfield(Player player, String[] args) {
+        String usage = "//flowfield <palette> [lines|%] [iterations] [velocity] [palette scalar] [noise] "
+                + "[-i inertia] [-g x,y,z] [-m mask] [-c] [-f] [-t]";
+        Map<Character, String> values = new HashMap<>();
+        Set<Character> bools = new HashSet<>();
+        List<String> positional = new ArrayList<>();
+        for (int i = 0; i < args.length; i++) {
+            String a = args[i];
+            if (!isFlag(a)) {
+                positional.add(a);
+                continue;
+            }
+            char flag = Character.toLowerCase(a.charAt(1));
+            if ("igm".indexOf(flag) >= 0) {
+                if (i + 1 >= args.length) {
+                    throw new IllegalArgumentException("-" + flag + " takes a value.");
+                }
+                values.put(flag, args[++i]);
+            } else if ("cft".indexOf(flag) >= 0) {
+                bools.add(flag);
+            } else {
+                throw new IllegalArgumentException("Unknown flag: " + a + ". Usage: " + usage);
+            }
+        }
+        if (positional.size() > 6) {
+            throw new IllegalArgumentException("Extra argument: " + positional.get(6) + ". Usage: " + usage);
+        }
+        Box box = c.region(player);
+        Palette palette = c.palette(player, Commands.need(positional.toArray(String[]::new), 0, usage));
+        String linesText = positional.size() > 1 ? positional.get(1) : "10%";
+        boolean percent = linesText.endsWith("%");
+        double lines = number(percent ? linesText.substring(0, linesText.length() - 1) : linesText, "Lines");
+        if (lines <= 0) {
+            throw new IllegalArgumentException("Lines: more than 0.");
+        }
+        int iterations = positional.size() > 2 ? Commands.integer(positional.get(2), 1, 4096, "Iterations") : 32;
+        double velocity = positional.size() > 3 ? number(positional.get(3), "Velocity") : 1;
+        double scalar = positional.size() > 4 ? number(positional.get(4), "Palette scalar") : 1;
+        if (velocity <= 0 || velocity > 16 || scalar <= 0) {
+            throw new IllegalArgumentException("Velocity: above 0, up to 16. Palette scalar: above 0.");
+        }
+        NoiseSpec noise = NoiseSpec.parse(positional.size() > 5 ? positional.get(5) : "perlin", 0.02);
+        double inertia = values.containsKey('i') ? number(values.get('i'), "Inertia") : 0;
+        if (inertia < 0 || inertia >= 1) {
+            throw new IllegalArgumentException("Inertia: from 0 to below 1.");
+        }
+        double[] gravity = {0, 0, 0};
+        if (values.containsKey('g')) {
+            String[] parts = values.get('g').split(",");
+            if (parts.length != 3) {
+                throw new IllegalArgumentException("Gravity: x,y,z, for example 0,0,0.5.");
+            }
+            for (int k = 0; k < 3; k++) {
+                gravity[k] = number(parts[k], "Gravity");
+            }
+        }
+        Mask start = values.containsKey('m') ? c.mask(player, values.get('m')) : null;
+        FlowField.Options options = new FlowField.Options(lines, percent, iterations, velocity, scalar, inertia, gravity,
+                start, bools.contains('c'), bools.contains('f'), bools.contains('t'));
+        c.run(player, "Flowfield", box, FlowField.build(box, palette, noise, options,
+                java.util.concurrent.ThreadLocalRandom.current().nextLong()));
     }
 
     private void generate(Player player, String[] args) {
