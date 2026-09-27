@@ -258,7 +258,8 @@ final class SculptCommands {
     private void texture(Player player, String[] args) {
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             Chat.info(player, "//texture <type> <mask> <palette> [setting:value...]: the start of the palette goes to "
-                    + "light and bumps, the end to hollows and shade (-##palette reverses).");
+                    + "light and bumps, the end to hollows and shade (-##palette reverses). ambient: hollows at the start, "
+                    + "edges at the end, as in ezEdits.");
             for (Textures.Kind kind : Textures.Kind.values()) {
                 player.sendMessage(Chat.suggest("//texture " + kind.id() + " #existing ##grayscale", kind.help()));
             }

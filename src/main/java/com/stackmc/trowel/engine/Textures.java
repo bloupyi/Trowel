@@ -16,12 +16,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * Texture a structure already built, like {@code //eztexture}: each block the mask selects
  * gets a value (light, hollows, slope, noise...), and the value picks its block in the palette.
  * The start of the palette goes to exposed or lit spots, the end to hollows and shade;
- * {@code -##palette} reverses it.
+ * {@code -##palette} reverses it. Ambient follows ezEdits instead: hollows at the start, flat
+ * surfaces in the middle, edges at the end.
  */
 public final class Textures {
 
     public enum Kind {
-        AMBIENT("Occlusion: hollows get darker"),
+        AMBIENT("Ambient: hollows at the start of the palette, edges at the end"),
         CURVATURE("Curvature: edges on one side, nooks on the other"),
         SUN("Sun: by orientation towards a direction, shadows possible"),
         LIGHT("Lamp: from your position"),
@@ -96,7 +97,7 @@ public final class Textures {
             BlockView real = context.view();
             ChangeSet changes = context.changes();
             int n = grid.solid.length;
-            int[] sat = s.kind() == Kind.AMBIENT || s.kind() == Kind.CURVATURE ? summed(grid) : null;
+            int[] sat = s.kind() == Kind.CURVATURE ? summed(grid) : null;
             int[] depth = s.kind() == Kind.DEPTH ? depth(grid, (int) Math.max(1, s.amount())) : null;
             NoiseSpec cells = s.kind() == Kind.CELLS
                     ? NoiseSpec.parse("cellular(cr:cell)", 1 / Math.max(1, Math.cbrt(region.volume() / Math.max(1, s.amount()))))
@@ -131,10 +132,7 @@ public final class Textures {
                             continue;
                         }
                         double v = switch (s.kind()) {
-                            case AMBIENT -> {
-                                double occlusion = occlusion(grid, sat, x, y, z, (int) Math.max(1, s.radius()));
-                                yield Math.max(0, Math.min(1, (occlusion - 0.3) / 0.45));
-                            }
+                            case AMBIENT -> ambient(grid, x, y, z, s.radius());
                             case CURVATURE -> {
                                 double occlusion = occlusion(grid, sat, x, y, z, (int) Math.max(1, s.radius()));
                                 yield Math.max(0, Math.min(1, 0.5 + (occlusion - 0.5) * 3));
@@ -198,6 +196,43 @@ public final class Textures {
                 + sat[x1 + w * (y0 + h * z0)] - sat[x0 + w * (y0 + h * z0)];
         int volume = (x1 - x0) * (y1 - y0) * (z1 - z0);
         return volume == 0 ? 0 : (count - 1) / (double) Math.max(1, volume - 1);
+    }
+
+    /**
+     * Ambient, like ezEdits: the share of solid blocks in a ball around the block. A flat surface
+     * is half buried and lands in the middle of the palette, edges and bumps towards its end,
+     * hollows and nooks towards its start.
+     */
+    static double ambient(Sculpt.Grid g, int x, int y, int z, double radius) {
+        int r = (int) Math.ceil(radius);
+        double r2 = radius * radius + 0.5;
+        int solid = 0;
+        int total = 0;
+        int flat = 0;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if ((dx == 0 && dy == 0 && dz == 0) || dx * dx + dy * dy + dz * dz > r2) {
+                        continue;
+                    }
+                    total++;
+                    if (dy <= 0) {
+                        flat++;
+                    }
+                    int ax = x + dx;
+                    int ay = y + dy;
+                    int az = z + dz;
+                    if (g.contains(ax, ay, az) && g.solid[g.index(ax, ay, az)]) {
+                        solid++;
+                    }
+                }
+            }
+        }
+        if (total == 0) {
+            return 0.5;
+        }
+        // Measured against flat ground, whose own layer counts as solid.
+        return Math.max(0, Math.min(1, 0.5 - (solid - flat) / (double) total * 2));
     }
 
     /** The normal of a surface: the sum of directions towards air, within the radius. */

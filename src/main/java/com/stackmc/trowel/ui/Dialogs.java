@@ -468,7 +468,7 @@ public final class Dialogs implements Listener {
         }
         screen.choice("type", "Texture", kinds, "ambient")
                 .text("mask", "Mask: the blocks to repaint", "#existing")
-                .text("pal", "Written palette", "-##grayscale")
+                .text("pal", "Written palette", "##grayscale")
                 .choice("preset", "Or a ready-made palette", presets, "none")
                 .number("r", "Analysis radius", 1, 8, 3)
                 .text("brightness", "Brightness (-1 to 1)", "0")
@@ -485,7 +485,7 @@ public final class Dialogs implements Listener {
         screen.run("Texture", "//texture", in -> {
             String preset = in.text("preset", "none");
             return "texture " + in.text("type", "ambient") + " " + in.mask("#existing") + " "
-                    + (preset.equals("none") ? in.word("pal", "-##grayscale") : preset)
+                    + (preset.equals("none") ? in.word("pal", "##grayscale") : preset)
                     + " radius:" + in.number("r", 3) + " brightness:" + in.word("brightness", "0")
                     + " contrast:" + in.word("contrast", "0") + " dir:" + in.word("dir", "0.35,-1,0.25")
                     + " interval:" + in.word("interval", "0,180") + " shadows:" + in.word("shadows", "0")

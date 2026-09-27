@@ -462,7 +462,7 @@ hollows and shade**: with `##grayscale` (black to white), write `-##grayscale`.
 
 | Type | Effect |
 |------|--------|
-| `ambient` | Hollows get darker |
+| `ambient` | As in ezEdits: the start of the palette goes to hollows and nooks, flat surfaces to the middle, edges and bumps to the end. `##grayscale` darkens the hollows |
 | `curvature` | Edges on one side, nooks on the other |
 | `sun` | By orientation towards the sun; `shadows:0.5` adds cast shadows |
 | `light` | A lamp at your position |
@@ -475,7 +475,7 @@ Settings: `radius:3`, `brightness:0.1`, `contrast:0.5`, `dir:0.3,-1,0.2`, `inter
 `shadows:0.3`, `axis:y`, `relative:true`, `amount:24`, `noise:perlin(f:0.1)`, `dither:0.6`.
 
 ```
-//texture ambient #existing -##grayscale radius:3
+//texture ambient #existing ##grayscale radius:3
 //texture sun #existing ##sand shadows:0.4
 ```
 
@@ -627,7 +627,7 @@ Suspension bridge        //catenary 12 4   then   //spline road(T:0.3) spruce_pl
 Roof                     //roof #noise[##deepslate][cells] 9 5 -b
 River                    //river water 2 4 1.5 -n
 Rock                     //g stone x*x+y*y+z*z<1-0.3*noise(x*3,y*3,z*3)
-Textured cliff           //surface rockify 2 8   then   //texture ambient #existing -##stone
+Textured cliff           //surface rockify 2 8   then   //texture ambient #existing ##stone
 Basalt columns           //hexagonalize 4 0.4
 Sign                     //font Serif   then   //text stone 16 Welcome
 ```
