@@ -58,7 +58,9 @@ public final class Dialogs implements Listener {
     private static final List<String[]> DIRECTIONS = List.of(
             new String[]{"me", "Where I look"}, new String[]{"up", "Up"}, new String[]{"down", "Down"},
             new String[]{"north", "North"}, new String[]{"south", "South"}, new String[]{"east", "East"},
-            new String[]{"west", "West"});
+            new String[]{"west", "West"}, new String[]{"northeast", "North-east"},
+            new String[]{"northwest", "North-west"}, new String[]{"southeast", "South-east"},
+            new String[]{"southwest", "South-west"});
 
     private final Trowel trowel;
 
