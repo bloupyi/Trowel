@@ -122,7 +122,9 @@ First steps:
 | `//selnear <radius> <mask>` | Selects what the mask selects around you |
 | `//count <mask>`, `//distr` | Count, block distribution |
 
-The **direction** is `me` (where you look, the default), `up`, `down`, `north`, `south`, `east`, `west`.
+The **direction** is `me` (where you look, the default), `up`, `down`, `north`, `south`, `east`, `west`,
+or a diagonal: `northeast`, `northwest`, `southeast`, `southwest` (`ne`, `nw`, `se`, `sw`), or several joined
+by commas, like `north,up` or `ne,down`. `//stack` then offsets each copy by the selection's size on every axis.
 
 ---
 

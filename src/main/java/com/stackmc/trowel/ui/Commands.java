@@ -82,7 +82,8 @@ public final class Commands {
     private static final String BRUSHES = "Brushes";
     private static final String SETTINGS = "Settings";
 
-    private static final List<String> DIRECTIONS = List.of("me", "up", "down", "north", "south", "east", "west");
+    private static final List<String> DIRECTIONS = List.of("me", "up", "down", "north", "south", "east", "west",
+            "northeast", "northwest", "southeast", "southwest");
     private static final List<String> PATTERN_SPECIALS = List.of("#hand", "#hotbar", "#aim", "#noise[", "#local[",
             "#expr[", "#expri[", "#gradient[", "#vgradient[", "#rgradient[", "#random[", "#stripes[", "#clipboard",
             "#cracks[", "#cells[", "#marble[", "#ridged[", "#smoothcells[", "#voronoiedge[", "##", "#noise:8:",
@@ -453,6 +454,9 @@ public final class Commands {
         }, args("word:90|180|270"));
         add("flip", CLIPBOARD, "//flip [direction]", "Flips the clipboard, towards where you look by default.", (p, a) -> {
             int[] d = direction(p, a.length > 0 ? a[0] : null);
+            if (Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) > 1) {
+                throw new IllegalArgumentException("Flip takes a single axis, not a diagonal.");
+            }
             Transform flip = d[0] != 0 ? Transform.FLIP_X : d[2] != 0 ? Transform.FLIP_Z : Transform.FLIP_Y;
             transformClipboard(p, flip, "Flipped.");
         }, args("dir"));
@@ -1098,12 +1102,13 @@ public final class Commands {
         return hit.getHitBlock();
     }
 
-    /** A named direction, or the look direction: up or down if clear, otherwise horizontal. */
+    /** A named direction, diagonals and {@code north,up} included, or the look direction: up or down if clear, otherwise horizontal. */
     static int[] direction(Player player, String raw) {
         if (raw != null && !raw.equalsIgnoreCase("me") && !raw.equalsIgnoreCase("look")) {
-            int[] named = Transform.vector(raw);
+            int[] named = Transform.combined(raw);
             if (named == null) {
-                throw new IllegalArgumentException("Unknown direction: " + raw + ". " + String.join(", ", DIRECTIONS));
+                throw new IllegalArgumentException("Unknown direction: " + raw + ". " + String.join(", ", DIRECTIONS)
+                        + ", or combined with commas: north,up.");
             }
             return named;
         }

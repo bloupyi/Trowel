@@ -46,4 +46,18 @@ class TransformTest {
         assertNull(Transform.rotation(45));
         assertNull(Transform.rotation(0));
     }
+
+    @Test
+    @DisplayName("Diagonals and comma-joined directions add up, one step per axis")
+    void combined() {
+        assertArrayEquals(new int[]{1, 0, -1}, Transform.combined("northeast"));
+        assertArrayEquals(new int[]{-1, 0, 1}, Transform.combined("SW"));
+        assertArrayEquals(new int[]{0, 1, -1}, Transform.combined("north,up"));
+        assertArrayEquals(new int[]{1, -1, 1}, Transform.combined("se, down"));
+        assertArrayEquals(new int[]{0, -1, 0}, Transform.combined("down"));
+        assertNull(Transform.combined("north,south"));
+        assertNull(Transform.combined("ne,east"));
+        assertNull(Transform.combined("north,"));
+        assertNull(Transform.combined("sideways"));
+    }
 }

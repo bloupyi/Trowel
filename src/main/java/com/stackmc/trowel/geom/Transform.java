@@ -73,6 +73,34 @@ public enum Transform {
         };
     }
 
+    /** Named directions joined by commas, diagonals included: {@code northeast}, {@code ne}, {@code north,east,up}. */
+    public static int[] combined(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        int[] sum = new int[3];
+        for (String part : raw.split(",", -1)) {
+            String name = part.trim().toLowerCase(Locale.ROOT);
+            int[] v = switch (name) {
+                case "northeast", "ne" -> new int[]{1, 0, -1};
+                case "northwest", "nw" -> new int[]{-1, 0, -1};
+                case "southeast", "se" -> new int[]{1, 0, 1};
+                case "southwest", "sw" -> new int[]{-1, 0, 1};
+                default -> vector(name);
+            };
+            if (v == null) {
+                return null;
+            }
+            for (int i = 0; i < 3; i++) {
+                if (v[i] != 0 && sum[i] != 0) {
+                    return null;
+                }
+                sum[i] += v[i];
+            }
+        }
+        return sum;
+    }
+
     public static String name(int[] vector) {
         if (vector[0] > 0) {
             return "east";
