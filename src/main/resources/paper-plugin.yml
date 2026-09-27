@@ -18,3 +18,6 @@ permissions:
   trowel.library.admin:
     description: "Overwrite or delete anyone's schematics"
     default: op
+  trowel.bypass.limit:
+    description: "Ignore limits.max-blocks and limits.max-chunks"
+    default: op

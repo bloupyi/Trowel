@@ -826,9 +826,9 @@ public final class Commands {
 
     private void copy(Player player, boolean cut) {
         Box box = selection(player);
-        if (box.volume() > trowel.settings().maxBlocks()) {
+        if (box.volume() > trowel.settings().maxBlocks(player)) {
             throw new IllegalArgumentException("Selection too large: " + box.volume() + " blocks, the maximum is "
-                    + trowel.settings().maxBlocks() + ".");
+                    + trowel.settings().maxBlocks(player) + ".");
         }
         World world = player.getWorld();
         Block origin = feet(player);
@@ -1052,7 +1052,7 @@ public final class Commands {
      */
     Box region(Player player) {
         Box box = selection(player);
-        long max = (long) trowel.settings().maxBlocks() * 40L;
+        long max = (long) trowel.settings().maxBlocks(player) * 40L;
         if (box.volume() > max) {
             throw new IllegalArgumentException("Selection too large for an operation: " + box.volume()
                     + " blocks, the maximum is " + max + ". Shrink it (//contract, //inset).");

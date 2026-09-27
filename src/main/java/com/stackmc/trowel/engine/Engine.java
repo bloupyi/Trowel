@@ -285,9 +285,9 @@ public final class Engine {
         if (reads != null) {
             Box box = reads.grow(2).withY(Math.max(minY, reads.minY() - 2), Math.min(maxY, reads.maxY() + 2));
             long count = (long) ((box.maxX() >> 4) - (box.minX() >> 4) + 1) * ((box.maxZ() >> 4) - (box.minZ() >> 4) + 1);
-            if (count > trowel.settings().maxChunks()) {
+            if (count > trowel.settings().maxChunks(player)) {
                 Chat.error(player, "Area too large: " + count + " chunks to read, the maximum is "
-                        + trowel.settings().maxChunks() + ".");
+                        + trowel.settings().maxChunks(player) + ".");
                 return null;
             }
             for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
@@ -314,7 +314,7 @@ public final class Engine {
             }
             return global == null || global.test(x, y, z, view);
         };
-        return new EditContext(view, params, markers, bounds, trowel.settings().maxBlocks(), gate,
+        return new EditContext(view, params, markers, bounds, trowel.settings().maxBlocks(player), gate,
                 trowel.transforms(), trowel.air(), new Progress());
     }
 
