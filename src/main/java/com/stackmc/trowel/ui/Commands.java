@@ -445,13 +445,24 @@ public final class Commands {
         add("paste", CLIPBOARD, "//paste [-a] [-o] [-s]",
                 "Pastes at your feet. -a without air, -o at the original place, -s selects the paste.",
                 this::paste, args("flag:-a|-o|-s", "flag:-a|-o|-s", "flag:-a|-o|-s"));
-        add("rotate", CLIPBOARD, "//rotate <90|180|270>", "Rotates the clipboard, markers included.", (p, a) -> {
-            Transform turn = Transform.rotation(integer(need(a, 0, "//rotate <90|180|270>"), -360, 360, "Angle"));
-            if (turn == null) {
-                throw new IllegalArgumentException("Only quarter turns are possible: 90, 180, 270.");
+        add("rotate", CLIPBOARD, "//rotate <degrees>", "Rotates the clipboard by any angle, markers included.", (p, a) -> {
+            String raw = need(a, 0, "//rotate <degrees>");
+            double angle;
+            try {
+                angle = Double.parseDouble(raw.trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Angle: number expected, not '" + raw + "'.");
             }
-            transformClipboard(p, turn, "Rotated by " + a[0] + " degrees.");
-        }, args("word:90|180|270"));
+            if (Double.isNaN(angle) || Double.isInfinite(angle)) {
+                throw new IllegalArgumentException("Angle: number expected, not '" + raw + "'.");
+            }
+            Session session = trowel.session(p);
+            if (session.getClipboard() == null) {
+                throw new IllegalArgumentException("Empty clipboard: //copy first.");
+            }
+            session.setClipboard(session.getClipboard().rotated(angle, trowel.host().markers(), trowel.transforms()));
+            Chat.info(p, "Rotated by " + raw.trim() + " degrees. Clipboard: ", session.getClipboard().size());
+        }, args("word:90|180|270|45"));
         add("flip", CLIPBOARD, "//flip [direction]", "Flips the clipboard, towards where you look by default.", (p, a) -> {
             int[] d = direction(p, a.length > 0 ? a[0] : null);
             if (Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) > 1) {
@@ -565,7 +576,7 @@ public final class Commands {
         World world = player.getWorld();
         Box result;
         if (mode.equals("expand") && args.length > 0 && args[0].equalsIgnoreCase("vert")) {
-            Box bounds = trowel.host().bounds(world);
+            Box bounds = trowel.host().bounds(player, world);
             result = box.withY(bounds == null ? world.getMinHeight() : bounds.minY(),
                     bounds == null ? world.getMaxHeight() - 1 : bounds.maxY());
         } else if (mode.equals("outset") || mode.equals("inset")) {
