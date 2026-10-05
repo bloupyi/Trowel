@@ -165,7 +165,7 @@ public final class AxiomBridge implements Listener {
             UUID id = player.getUniqueId();
             boolean allowed = trowel.host().denyEdit(player) == null;
             if (allowed) {
-                access.put(id, new Access(player.getWorld().getUID(), trowel.host().bounds(player.getWorld())));
+                access.put(id, new Access(player.getWorld().getUID(), trowel.host().bounds(player, player.getWorld())));
             } else {
                 access.remove(id);
             }

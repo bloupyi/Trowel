@@ -24,6 +24,11 @@ public interface TrowelHost {
     /** The buildable part of this world, or {@code null} if all of it is. */
     Box bounds(World world);
 
+    /** The part of this world this player may build in, or {@code null} if all of it; the buildable part by default. */
+    default Box bounds(Player player, World world) {
+        return bounds(world);
+    }
+
     MarkerSupport markers();
 
     /** Trowel just placed blocks in this world. */

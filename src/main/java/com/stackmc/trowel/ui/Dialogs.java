@@ -823,7 +823,7 @@ public final class Dialogs implements Listener {
 
     private void settings(Player player) {
         Session session = trowel.session(player);
-        Box bounds = trowel.host().bounds(player.getWorld());
+        Box bounds = trowel.host().bounds(player, player.getWorld());
         Screen screen = new Screen(player, "Settings and help", () -> settings(player)).columns(2);
         screen.line("Limit: " + trowel.settings().maxBlocks() + " blocks per operation, "
                 + trowel.settings().blocksPerTick() + " placed per tick, brushes up to "

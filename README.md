@@ -523,7 +523,7 @@ Roof, road, river and dashes follow the spline points.
 |---------|--------|
 | `//copy`, `//cut` | Copies around your feet, markers included |
 | `//paste [-a] [-o] [-s]` | Pastes at your feet; `-a` without air, `-o` at the original place, `-s` selects |
-| `//rotate <90\|180\|270>`, `//flip [direction]` | Rotates, flips (marker settings too) |
+| `//rotate <degrees>`, `//flip [direction]` | Rotates by any angle (40, 77...), flips (marker settings too) |
 | `//move <n> [direction]` | Moves the selection and its content |
 | `//stack <count> [direction] [-a]` | Repeats the selection |
 

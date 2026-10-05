@@ -149,6 +149,95 @@ public final class Clipboard {
                 world, originX, originY, originZ);
     }
 
+    /**
+     * The same clipboard, rotated by any angle around the origin, clockwise seen from above.
+     *
+     * <p>The nearest quarter turn is done first, so block states and marker settings turn with
+     * it; the rest (at most 45 degrees) moves blocks only, each target fetching the nearest
+     * source block.</p>
+     */
+    public Clipboard rotated(double degrees, MarkerSupport markers, BlockTransforms blocks) {
+        int quarters = (int) Math.round(degrees / 90.0);
+        double rest = degrees - quarters * 90.0;
+        Transform turn = Transform.rotation(quarters * 90);
+        Clipboard base = turn == null ? this : transformed(turn, markers, blocks);
+        if (Math.abs(rest) < 1e-6) {
+            return base;
+        }
+        Long2ObjectOpenHashMap<BlockData> turned = turnFreely(base.cells, rest);
+        Long2ObjectOpenHashMap<Map<String, String>> turnedParams = new Long2ObjectOpenHashMap<>();
+        for (Long2ObjectMap.Entry<Map<String, String>> entry : base.params.long2ObjectEntrySet()) {
+            BlockData data = base.cells.get(entry.getLongKey());
+            if (data == null) {
+                continue;
+            }
+            long target = turnPoint(entry.getLongKey(), rest);
+            turned.put(target, data);
+            turnedParams.put(target, entry.getValue());
+        }
+        return new Clipboard(turned, turnedParams, boundsOf(turned), world, originX, originY, originZ);
+    }
+
+    /** Cells rotated by any angle around the vertical axis through the origin, nearest neighbour. */
+    static <T> Long2ObjectOpenHashMap<T> turnFreely(Long2ObjectOpenHashMap<T> cells, double degrees) {
+        double a = Math.toRadians(degrees);
+        double cos = Math.cos(a);
+        double sin = Math.sin(a);
+        Box from = boundsOf(cells);
+        double minX = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double minZ = Double.MAX_VALUE;
+        double maxZ = -Double.MAX_VALUE;
+        for (int x : new int[]{from.minX(), from.maxX()}) {
+            for (int z : new int[]{from.minZ(), from.maxZ()}) {
+                double tx = x * cos - z * sin;
+                double tz = x * sin + z * cos;
+                minX = Math.min(minX, tx);
+                maxX = Math.max(maxX, tx);
+                minZ = Math.min(minZ, tz);
+                maxZ = Math.max(maxZ, tz);
+            }
+        }
+        Long2ObjectOpenHashMap<T> turned = new Long2ObjectOpenHashMap<>(cells.size());
+        for (int x = (int) Math.floor(minX); x <= (int) Math.ceil(maxX); x++) {
+            for (int z = (int) Math.floor(minZ); z <= (int) Math.ceil(maxZ); z++) {
+                // The block that comes here: inverse rotation.
+                int sx = (int) Math.round(x * cos + z * sin);
+                int sz = (int) Math.round(-x * sin + z * cos);
+                for (int y = from.minY(); y <= from.maxY(); y++) {
+                    T value = cells.get(Keys.pack(sx, y, sz));
+                    if (value != null) {
+                        turned.put(Keys.pack(x, y, z), value);
+                    }
+                }
+            }
+        }
+        return turned;
+    }
+
+    /** A relative position rotated by any angle around the vertical axis, rounded to a block. */
+    static long turnPoint(long key, double degrees) {
+        double a = Math.toRadians(degrees);
+        int x = Keys.x(key);
+        int z = Keys.z(key);
+        return Keys.pack((int) Math.round(x * Math.cos(a) - z * Math.sin(a)), Keys.y(key),
+                (int) Math.round(x * Math.sin(a) + z * Math.cos(a)));
+    }
+
+    private static Box boundsOf(Long2ObjectOpenHashMap<?> cells) {
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        for (long key : cells.keySet()) {
+            minX = Math.min(minX, Keys.x(key));
+            minY = Math.min(minY, Keys.y(key));
+            minZ = Math.min(minZ, Keys.z(key));
+            maxX = Math.max(maxX, Keys.x(key));
+            maxY = Math.max(maxY, Keys.y(key));
+            maxZ = Math.max(maxZ, Keys.z(key));
+        }
+        return new Box(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
     private static int size(Map<String, String> values, Map<String, ParamKind> kinds, ParamKind axis) {
         for (Map.Entry<String, ParamKind> entry : kinds.entrySet()) {
             if (entry.getValue() == axis) {

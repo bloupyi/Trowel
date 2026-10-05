@@ -191,7 +191,7 @@ final class SculptCommands {
                     int r = Commands.integer(Commands.need(a, 0, "//selnear <radius> <mask>"), 1, 64, "Radius");
                     Block f = Commands.feet(p);
                     Box around = Box.around(f.getX(), f.getY(), f.getZ(), r);
-                    Box bounds = trowel.host().bounds(p.getWorld());
+                    Box bounds = trowel.host().bounds(p, p.getWorld());
                     if (bounds != null) {
                         around = around.intersect(bounds);
                         if (around == null) {
