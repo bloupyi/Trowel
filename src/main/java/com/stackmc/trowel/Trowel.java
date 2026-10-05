@@ -191,7 +191,7 @@ public final class Trowel implements TrowelApi {
         if (box == null) {
             return null;
         }
-        Box bounds = hosts.bounds(world);
+        Box bounds = hosts.bounds(player, world);
         return bounds == null ? box : box.intersect(bounds);
     }
 
@@ -262,7 +262,7 @@ public final class Trowel implements TrowelApi {
         int x = target.getX();
         int y = target.getY();
         int z = target.getZ();
-        Box bounds = hosts.bounds(target.getWorld());
+        Box bounds = hosts.bounds(player, target.getWorld());
         if (bounds != null && !bounds.grow(settings.size()).contains(x, y, z)) {
             Chat.bar(player, "Outside the buildable area.", NamedTextColor.RED);
             return;

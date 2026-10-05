@@ -85,6 +85,11 @@ final class HostRegistry implements TrowelHost {
     }
 
     @Override
+    public Box bounds(Player player, World world) {
+        return of(world).bounds(player, world);
+    }
+
+    @Override
     public MarkerSupport markers() {
         return markers;
     }

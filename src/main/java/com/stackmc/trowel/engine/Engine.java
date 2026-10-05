@@ -273,7 +273,7 @@ public final class Engine {
         int maxY = world.getMaxHeight() - 1;
         Long2ObjectOpenHashMap<ChunkSnapshot> chunks = new Long2ObjectOpenHashMap<>();
         Long2ObjectMap<Map<String, String>> params = new Long2ObjectOpenHashMap<>();
-        Box bounds = trowel.host().bounds(world);
+        Box bounds = trowel.host().bounds(player, world);
         if (reads != null && bounds != null) {
             // Nothing to read far from the buildable area: nothing would be placed, and reading loads chunks.
             reads = reads.intersect(bounds.grow(4));
