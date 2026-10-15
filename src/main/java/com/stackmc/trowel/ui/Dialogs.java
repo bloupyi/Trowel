@@ -53,7 +53,7 @@ import java.util.function.Function;
 public final class Dialogs implements Listener {
 
     private static final ClickCallback.Options ONCE = ClickCallback.Options.builder()
-            .uses(1).lifetime(Duration.ofMinutes(15)).build();
+            .uses(1).lifetime(Duration.ofMinutes(3)).build();
 
     private static final List<String[]> DIRECTIONS = List.of(
             new String[]{"me", "Where I look"}, new String[]{"up", "Up"}, new String[]{"down", "Down"},

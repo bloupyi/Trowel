@@ -5,6 +5,7 @@ import com.stackmc.trowel.api.Keys;
 import com.stackmc.trowel.geom.Shapes;
 import com.stackmc.trowel.pattern.Mask;
 import com.stackmc.trowel.pattern.Pattern;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Tag;
@@ -16,7 +17,6 @@ import org.bukkit.block.data.type.Gate;
 import org.bukkit.block.data.type.GlassPane;
 import org.bukkit.block.data.type.Wall;
 
-import java.util.ArrayDeque;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -149,35 +149,43 @@ public final class RegionOps {
      */
     public static Engine.Compute hollow(Box box, int thickness, Pattern fill) {
         return context -> {
+            if (box.volume() > Integer.MAX_VALUE - 8) {
+                throw new IllegalArgumentException("Selection too large to hollow: " + box.volume()
+                        + " blocks, the maximum is " + (Integer.MAX_VALUE - 8) + ".");
+            }
             BlockView view = context.view();
             int w = box.width();
             int h = box.height();
-            int[] distance = new int[(int) box.volume()];
-            java.util.Arrays.fill(distance, -1);
-            ArrayDeque<int[]> queue = new ArrayDeque<>();
+            // Distances never exceed the thickness (16 at most): a byte per block is enough.
+            byte[] distance = new byte[(int) box.volume()];
+            java.util.Arrays.fill(distance, (byte) -1);
+            LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
             each(context, box, (x, y, z) -> {
                 if (!view.air(x, y, z) && view.exposed(x, y, z)) {
                     distance[index(box, w, h, x, y, z)] = 0;
-                    queue.add(new int[]{x, y, z});
+                    queue.enqueue(Keys.pack(x, y, z));
                 }
             });
             while (!queue.isEmpty()) {
-                int[] cell = queue.poll();
-                int d = distance[index(box, w, h, cell[0], cell[1], cell[2])];
+                long cell = queue.dequeueLong();
+                int cx = Keys.x(cell);
+                int cy = Keys.y(cell);
+                int cz = Keys.z(cell);
+                int d = distance[index(box, w, h, cx, cy, cz)];
                 if (d >= thickness) {
                     continue;
                 }
                 for (int[] n : NEIGHBOURS) {
-                    int x = cell[0] + n[0];
-                    int y = cell[1] + n[1];
-                    int z = cell[2] + n[2];
+                    int x = cx + n[0];
+                    int y = cy + n[1];
+                    int z = cz + n[2];
                     if (!box.contains(x, y, z) || view.air(x, y, z)) {
                         continue;
                     }
                     int i = index(box, w, h, x, y, z);
                     if (distance[i] < 0) {
-                        distance[i] = d + 1;
-                        queue.add(new int[]{x, y, z});
+                        distance[i] = (byte) (d + 1);
+                        queue.enqueue(Keys.pack(x, y, z));
                     }
                 }
             }
@@ -194,7 +202,7 @@ public final class RegionOps {
     }
 
     private static int index(Box box, int w, int h, int x, int y, int z) {
-        return (x - box.minX()) + w * ((y - box.minY()) + h * (z - box.minZ()));
+        return (int) ((x - box.minX()) + (long) w * ((y - box.minY()) + (long) h * (z - box.minZ())));
     }
 
     /** Grass on the surface, three layers of dirt, then stone, on natural blocks. */
@@ -463,6 +471,7 @@ public final class RegionOps {
         }
         long target = Keys.pack(x + dx, y + dy, z + dz);
         changes.set(target, data);
+        changes.tile(target, context.tileAt(Keys.pack(x, y, z)));
         if (context.view().marker(x, y, z)) {
             changes.params(target, context.paramsAt(Keys.pack(x, y, z)));
         }

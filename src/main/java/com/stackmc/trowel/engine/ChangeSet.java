@@ -5,6 +5,7 @@ import com.stackmc.trowel.api.Keys;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 
 import java.util.Map;
@@ -32,6 +33,7 @@ public final class ChangeSet {
     private final Long2ObjectLinkedOpenHashMap<BlockData> blocks = new Long2ObjectLinkedOpenHashMap<>();
     private final Long2ObjectOpenHashMap<Map<String, String>> params = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet named = new LongOpenHashSet();
+    private final Long2ObjectOpenHashMap<BlockState> tiles = new Long2ObjectOpenHashMap<>();
     private final Box bounds;
     private final int limit;
     private final Gate gate;
@@ -48,17 +50,17 @@ public final class ChangeSet {
         this(bounds, limit, null);
     }
 
-    /**
-     * @param bounds buildable part, or {@code null}
-     * @param limit  number of blocks beyond which computing stops
-     * @param gate   extra filter, or {@code null}
-     */
     /** Publishes progress and stops if the player cancels. */
     public ChangeSet track(Progress progress) {
         this.progress = progress;
         return this;
     }
 
+    /**
+     * @param bounds buildable part, or {@code null}
+     * @param limit  number of blocks beyond which computing stops
+     * @param gate   extra filter, or {@code null}
+     */
     public ChangeSet(Box bounds, int limit, Gate gate) {
         this.bounds = bounds;
         this.limit = limit;
@@ -85,6 +87,7 @@ public final class ChangeSet {
         }
         blocks.put(key, data);
         params.remove(key);
+        tiles.remove(key);
         Map<String, String> carried = NamedMarkers.carried(data);
         if (carried != null) {
             params.put(key, carried);
@@ -114,6 +117,20 @@ public final class ChangeSet {
             return;
         }
         params.put(key, values);
+    }
+
+    /**
+     * The block placed at this position gets the data of this one (sign text, chest content...),
+     * its block state being the one placed. No effect if the block was not accepted.
+     */
+    public void tile(long key, BlockState state) {
+        if (state != null && blocks.containsKey(key)) {
+            tiles.put(key, state);
+        }
+    }
+
+    public Long2ObjectOpenHashMap<BlockState> tiles() {
+        return tiles;
     }
 
     /** Positions where a marker was asked for by name. */

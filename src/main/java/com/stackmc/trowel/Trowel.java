@@ -40,6 +40,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.HashMap;
 import java.util.List;
@@ -57,9 +58,14 @@ import java.util.UUID;
 @Accessors(fluent = true)
 public final class Trowel implements TrowelApi {
 
+    private static final long KEEP_MILLIS = 15 * 60 * 1000L;
+
     private final JavaPlugin plugin;
     private final HostRegistry hosts = new HostRegistry();
     private final Map<UUID, Session> sessions = new HashMap<>();
+    /** When each player left: their session is kept a while, so a reconnect keeps history and clipboard. */
+    private final Map<UUID, Long> departed = new HashMap<>();
+    private BukkitTask sweeper;
 
     private TrowelSettings settings;
     private BlockTransforms transforms;
@@ -118,6 +124,7 @@ public final class Trowel implements TrowelApi {
         hud.start();
         noclip = new NoClip(this);
         noclip.start();
+        sweeper = plugin.getServer().getScheduler().runTaskTimer(plugin, this::sweep, 1200L, 1200L);
         checkQuickActions();
         axiom = new AxiomBridge(this);
         axiom.enable();
@@ -152,13 +159,23 @@ public final class Trowel implements TrowelApi {
         if (axiom != null) {
             axiom.disable();
         }
+        if (engine != null) {
+            engine.shutdown();
+        }
         listeners.forEach(HandlerList::unregisterAll);
+        if (sweeper != null) {
+            sweeper.cancel();
+        }
         sessions.clear();
+        departed.clear();
     }
 
     @Override
     public void reload() {
         settings = TrowelSettings.load(plugin);
+        if (axiom != null) {
+            axiom.reload();
+        }
     }
 
     public Session session(Player player) {
@@ -174,10 +191,27 @@ public final class Trowel implements TrowelApi {
         if (noclip != null) {
             noclip.forget(player);
         }
-        sessions.remove(player.getUniqueId());
+        departed.put(player.getUniqueId(), System.currentTimeMillis());
+        hosts.forget(player);
         if (hud != null) {
             hud.forget(player);
         }
+    }
+
+    /** Drops the sessions of players gone for more than {@link #KEEP_MILLIS}, once their operation is over. */
+    private void sweep() {
+        long now = System.currentTimeMillis();
+        departed.entrySet().removeIf(entry -> {
+            if (plugin.getServer().getPlayer(entry.getKey()) != null) {
+                return true;
+            }
+            Session session = sessions.get(entry.getKey());
+            if (now - entry.getValue() < KEEP_MILLIS || (session != null && session.isBusy())) {
+                return false;
+            }
+            sessions.remove(entry.getKey());
+            return true;
+        });
     }
 
     /** The player's selection in the world they stand in, cropped to the buildable part. */

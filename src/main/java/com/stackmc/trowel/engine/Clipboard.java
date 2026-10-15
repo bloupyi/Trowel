@@ -8,6 +8,7 @@ import com.stackmc.trowel.geom.MarkerTransform;
 import com.stackmc.trowel.geom.Transform;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ public final class Clipboard {
 
     private final Long2ObjectOpenHashMap<BlockData> cells;
     private final Long2ObjectOpenHashMap<Map<String, String>> params;
+    private final Long2ObjectOpenHashMap<BlockState> tiles;
     private final Box bounds;
     private final UUID world;
     private final int originX;
@@ -32,9 +34,11 @@ public final class Clipboard {
     private final int originZ;
 
     private Clipboard(Long2ObjectOpenHashMap<BlockData> cells, Long2ObjectOpenHashMap<Map<String, String>> params,
-                      Box bounds, UUID world, int originX, int originY, int originZ) {
+                      Long2ObjectOpenHashMap<BlockState> tiles, Box bounds, UUID world, int originX, int originY,
+                      int originZ) {
         this.cells = cells;
         this.params = params;
+        this.tiles = tiles;
         this.bounds = bounds;
         this.world = world;
         this.originX = originX;
@@ -45,7 +49,17 @@ public final class Clipboard {
     /** A clipboard read from the library: it comes from no world. */
     public static Clipboard of(Long2ObjectOpenHashMap<BlockData> cells, Long2ObjectOpenHashMap<Map<String, String>> params,
                                Box bounds) {
-        return new Clipboard(cells, params, bounds, null, 0, 0, 0);
+        return of(cells, params, new Long2ObjectOpenHashMap<>(), bounds);
+    }
+
+    public static Clipboard of(Long2ObjectOpenHashMap<BlockData> cells, Long2ObjectOpenHashMap<Map<String, String>> params,
+                               Long2ObjectOpenHashMap<BlockState> tiles, Box bounds) {
+        return new Clipboard(cells, params, tiles, bounds, null, 0, 0, 0);
+    }
+
+    /** Data of the blocks that have some (sign text, chest content...), by relative position. */
+    public Long2ObjectOpenHashMap<BlockState> tiles() {
+        return tiles;
     }
 
     /** Blocks, by position relative to the origin. */
@@ -62,19 +76,25 @@ public final class Clipboard {
     public static Clipboard copy(EditContext context, Box box, UUID world, int originX, int originY, int originZ) {
         Long2ObjectOpenHashMap<BlockData> cells = new Long2ObjectOpenHashMap<>();
         Long2ObjectOpenHashMap<Map<String, String>> params = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<BlockState> tiles = new Long2ObjectOpenHashMap<>();
         for (int x = box.minX(); x <= box.maxX(); x++) {
             for (int y = box.minY(); y <= box.maxY(); y++) {
                 for (int z = box.minZ(); z <= box.maxZ(); z++) {
                     long relative = Keys.pack(x - originX, y - originY, z - originZ);
                     BlockData data = context.view().get(x, y, z);
                     cells.put(relative, data);
+                    BlockState tile = context.tileAt(Keys.pack(x, y, z));
+                    if (tile != null) {
+                        tiles.put(relative, tile);
+                    }
                     if (context.view().marker(x, y, z)) {
                         params.put(relative, new LinkedHashMap<>(context.paramsAt(Keys.pack(x, y, z))));
                     }
                 }
             }
         }
-        return new Clipboard(cells, params, box.shift(-originX, -originY, -originZ), world, originX, originY, originZ);
+        return new Clipboard(cells, params, tiles, box.shift(-originX, -originY, -originZ), world, originX, originY,
+                originZ);
     }
 
     /**
@@ -89,6 +109,13 @@ public final class Clipboard {
             long key = entry.getLongKey();
             int[] p = transform.apply(Keys.x(key), Keys.y(key), Keys.z(key));
             turned.put(Keys.pack(p[0], p[1], p[2]), blocks.apply(entry.getValue(), transform));
+        }
+
+        Long2ObjectOpenHashMap<BlockState> turnedTiles = new Long2ObjectOpenHashMap<>(tiles.size());
+        for (Long2ObjectMap.Entry<BlockState> entry : tiles.long2ObjectEntrySet()) {
+            long key = entry.getLongKey();
+            int[] p = transform.apply(Keys.x(key), Keys.y(key), Keys.z(key));
+            turnedTiles.put(Keys.pack(p[0], p[1], p[2]), entry.getValue());
         }
 
         Long2ObjectOpenHashMap<Map<String, String>> turnedParams = new Long2ObjectOpenHashMap<>();
@@ -145,7 +172,7 @@ public final class Clipboard {
 
         int[] a = transform.apply(bounds.minX(), bounds.minY(), bounds.minZ());
         int[] b = transform.apply(bounds.maxX(), bounds.maxY(), bounds.maxZ());
-        return new Clipboard(turned, turnedParams, new Box(a[0], a[1], a[2], b[0], b[1], b[2]),
+        return new Clipboard(turned, turnedParams, turnedTiles, new Box(a[0], a[1], a[2], b[0], b[1], b[2]),
                 world, originX, originY, originZ);
     }
 
@@ -175,7 +202,17 @@ public final class Clipboard {
             turned.put(target, data);
             turnedParams.put(target, entry.getValue());
         }
-        return new Clipboard(turned, turnedParams, boundsOf(turned), world, originX, originY, originZ);
+        Long2ObjectOpenHashMap<BlockState> turnedTiles = new Long2ObjectOpenHashMap<>();
+        for (Long2ObjectMap.Entry<BlockState> entry : base.tiles.long2ObjectEntrySet()) {
+            BlockData data = base.cells.get(entry.getLongKey());
+            if (data == null) {
+                continue;
+            }
+            long target = turnPoint(entry.getLongKey(), rest);
+            turned.put(target, data);
+            turnedTiles.put(target, entry.getValue());
+        }
+        return new Clipboard(turned, turnedParams, turnedTiles, boundsOf(turned), world, originX, originY, originZ);
     }
 
     /** Cells rotated by any angle around the vertical axis through the origin, nearest neighbour. */
@@ -262,6 +299,7 @@ public final class Clipboard {
             long key = entry.getLongKey();
             long target = Keys.pack(Keys.x(key) + x, Keys.y(key) + y, Keys.z(key) + z);
             changes.set(target, data);
+            changes.tile(target, tiles.get(key));
             Map<String, String> values = params.get(key);
             if (values != null) {
                 changes.params(target, values);
@@ -286,7 +324,7 @@ public final class Clipboard {
                 carrying.put(entry.getLongKey(), NamedMarkers.carrying(data, entry.getValue()));
             }
         }
-        return new Clipboard(carrying, params, bounds, world, originX, originY, originZ);
+        return new Clipboard(carrying, params, tiles, bounds, world, originX, originY, originZ);
     }
 
     /** The clipboard repeated forever, like tiling: for the {@code #clipboard} pattern. */

@@ -9,7 +9,11 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -22,6 +26,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -45,7 +51,7 @@ import java.util.zip.GZIPOutputStream;
 public final class SchematicLibrary {
 
     private static final int MAGIC = 0x54534348;
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final int THUMBNAIL = 16;
 
     /** What the index remembers about a schematic. */
@@ -62,7 +68,8 @@ public final class SchematicLibrary {
     }
 
     /** A file that was read, waiting for its blocks to be rebuilt on the main thread. */
-    private record Raw(Box bounds, List<String> palette, int[] cells, Map<long[], Map<String, String>> params) {
+    record Raw(Box bounds, List<String> palette, int[] cells, Map<long[], Map<String, String>> params,
+                       Map<long[], byte[]> tiles) {
     }
 
     private final JavaPlugin plugin;
@@ -159,32 +166,39 @@ public final class SchematicLibrary {
             done.accept("'" + key + "' is already taken by " + existing.authorName() + ".");
             return;
         }
-        Box b = clipboard.bounds();
-        Map<String, Integer> palette = new LinkedHashMap<>();
-        Long2ObjectMap<BlockData> cells = clipboard.cells();
-        int[] packed = new int[cells.size() * 4];
-        int i = 0;
-        int solid = 0;
-        for (Long2ObjectMap.Entry<BlockData> cell : cells.long2ObjectEntrySet()) {
-            long k = cell.getLongKey();
-            String state = cell.getValue().getAsString();
-            Integer id = palette.computeIfAbsent(state, s -> palette.size());
-            packed[i++] = Keys.x(k);
-            packed[i++] = Keys.y(k);
-            packed[i++] = Keys.z(k);
-            packed[i++] = id;
-            if (!cell.getValue().getMaterial().isAir()) {
-                solid++;
+        // Block data goes through an item, which can only be built on the main thread.
+        Map<Long, byte[]> tiles = new HashMap<>();
+        for (Long2ObjectMap.Entry<BlockState> tile : clipboard.tiles().long2ObjectEntrySet()) {
+            byte[] bytes = encode(tile.getValue());
+            if (bytes != null) {
+                tiles.put(tile.getLongKey(), bytes);
             }
         }
-        Map<Long, Map<String, String>> params = new HashMap<>(clipboard.params());
-        Entry entry = new Entry(key, author, authorName, System.currentTimeMillis(), b.width(), b.height(), b.depth(),
-                solid, shared, thumbnail(clipboard));
-        List<String> states = new ArrayList<>(palette.keySet());
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Box b = clipboard.bounds();
+            Map<String, Integer> palette = new LinkedHashMap<>();
+            Long2ObjectMap<BlockData> cells = clipboard.cells();
+            int[] packed = new int[cells.size() * 4];
+            int i = 0;
+            int solid = 0;
+            for (Long2ObjectMap.Entry<BlockData> cell : cells.long2ObjectEntrySet()) {
+                long k = cell.getLongKey();
+                String state = cell.getValue().getAsString();
+                Integer id = palette.computeIfAbsent(state, s -> palette.size());
+                packed[i++] = Keys.x(k);
+                packed[i++] = Keys.y(k);
+                packed[i++] = Keys.z(k);
+                packed[i++] = id;
+                if (!cell.getValue().getMaterial().isAir()) {
+                    solid++;
+                }
+            }
+            Entry entry = new Entry(key, author, authorName, System.currentTimeMillis(), b.width(), b.height(),
+                    b.depth(), solid, shared, thumbnail(clipboard));
             String error = null;
             try {
-                write(new File(folder, key + ".tsch"), b, states, packed, params);
+                write(new File(folder, key + ".tsch"), b, new ArrayList<>(palette.keySet()), packed,
+                        new HashMap<>(clipboard.params()), tiles);
             } catch (IOException e) {
                 plugin.getLogger().log(Level.WARNING, "Could not save schematic " + key, e);
                 error = "could not write (" + e.getMessage() + ").";
@@ -200,11 +214,39 @@ public final class SchematicLibrary {
         });
     }
 
-    private static void write(File file, Box b, List<String> states, int[] cells, Map<Long, Map<String, String>> params)
-            throws IOException {
+    /** A block's own data (sign text, chest content...) as the bytes of an item carrying it, or {@code null}. */
+    private static byte[] encode(BlockState state) {
+        try {
+            Material item = state.getBlockData().getPlacementMaterial();
+            if (item == null || !item.isItem() || item.isAir()) {
+                return null;
+            }
+            ItemStack stack = ItemStack.of(item);
+            if (!stack.editMeta(BlockStateMeta.class, meta -> meta.setBlockState(state))) {
+                return null;
+            }
+            return stack.serializeAsBytes();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static BlockState decode(byte[] bytes) {
+        try {
+            return ItemStack.deserializeBytes(bytes).getItemMeta() instanceof BlockStateMeta meta && meta.hasBlockState()
+                    ? meta.getBlockState() : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Writes next to the file, then swaps: a crash while writing never damages the schematic already there. */
+    static void write(File file, Box b, List<String> states, int[] cells, Map<Long, Map<String, String>> params,
+                      Map<Long, byte[]> tiles) throws IOException {
         file.getParentFile().mkdirs();
+        File temporary = new File(file.getParentFile(), file.getName() + ".tmp");
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(
-                new GZIPOutputStream(new FileOutputStream(file))))) {
+                new GZIPOutputStream(new FileOutputStream(temporary))))) {
             out.writeInt(MAGIC);
             out.writeInt(VERSION);
             out.writeInt(b.minX());
@@ -232,7 +274,16 @@ public final class SchematicLibrary {
                     out.writeUTF(v.getValue());
                 }
             }
+            out.writeInt(tiles.size());
+            for (Map.Entry<Long, byte[]> t : tiles.entrySet()) {
+                out.writeInt(Keys.x(t.getKey()));
+                out.writeInt(Keys.y(t.getKey()));
+                out.writeInt(Keys.z(t.getKey()));
+                out.writeInt(t.getValue().length);
+                out.write(t.getValue());
+            }
         }
+        Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     // ------------------------------------------------------------------- reading
@@ -254,20 +305,25 @@ public final class SchematicLibrary {
                 return;
             }
             Bukkit.getScheduler().runTask(plugin, () -> {
-                try {
-                    done.accept(build(raw));
-                } catch (IllegalArgumentException e) {
-                    failed.accept("a block of this schematic does not exist in this version.");
+                Built built = build(raw);
+                if (built.unknown() > 0) {
+                    failed.accept(built.unknown() + " block(s) of this schematic do not exist in this version: "
+                            + "replaced by air.");
                 }
+                done.accept(built.clipboard());
             });
         });
     }
 
-    private static Raw read(File file) throws IOException {
+    static Raw read(File file) throws IOException {
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(
                 new GZIPInputStream(new FileInputStream(file))))) {
-            if (in.readInt() != MAGIC || in.readInt() > VERSION) {
+            if (in.readInt() != MAGIC) {
                 throw new IOException("unknown format");
+            }
+            int version = in.readInt();
+            if (version > VERSION) {
+                throw new IOException("made by a newer Trowel");
             }
             Box bounds = new Box(in.readInt(), in.readInt(), in.readInt(), in.readInt(), in.readInt(), in.readInt());
             int states = in.readInt();
@@ -291,23 +347,54 @@ public final class SchematicLibrary {
                 }
                 params.put(at, values);
             }
-            return new Raw(bounds, palette, cells, params);
+            Map<long[], byte[]> tiles = new LinkedHashMap<>();
+            int tileCount = version >= 2 ? in.readInt() : 0;
+            for (int i = 0; i < tileCount; i++) {
+                long[] at = {in.readInt(), in.readInt(), in.readInt()};
+                byte[] bytes = new byte[in.readInt()];
+                in.readFully(bytes);
+                tiles.put(at, bytes);
+            }
+            return new Raw(bounds, palette, cells, params, tiles);
         }
     }
 
-    private static Clipboard build(Raw raw) {
+    private record Built(Clipboard clipboard, int unknown) {
+    }
+
+    /** Rebuilds the blocks; a state this version does not know (a block renamed by an update) becomes air. */
+    private static Built build(Raw raw) {
         List<BlockData> states = new ArrayList<>();
+        BlockData air = Material.AIR.createBlockData();
+        java.util.Set<Integer> unknownIds = new java.util.HashSet<>();
         for (String state : raw.palette()) {
-            states.add(Bukkit.createBlockData(state));
+            try {
+                states.add(Bukkit.createBlockData(state));
+            } catch (IllegalArgumentException e) {
+                unknownIds.add(states.size());
+                states.add(air);
+            }
         }
+        int unknown = 0;
         Long2ObjectOpenHashMap<BlockData> cells = new Long2ObjectOpenHashMap<>(raw.cells().length / 4);
         int[] c = raw.cells();
         for (int i = 0; i < c.length; i += 4) {
             cells.put(Keys.pack(c[i], c[i + 1], c[i + 2]), states.get(c[i + 3]));
+            if (unknownIds.contains(c[i + 3])) {
+                unknown++;
+            }
         }
         Long2ObjectOpenHashMap<Map<String, String>> params = new Long2ObjectOpenHashMap<>();
         raw.params().forEach((at, values) -> params.put(Keys.pack((int) at[0], (int) at[1], (int) at[2]), values));
-        return Clipboard.of(cells, params, raw.bounds());
+        Long2ObjectOpenHashMap<BlockState> tiles = new Long2ObjectOpenHashMap<>();
+        raw.tiles().forEach((at, bytes) -> {
+            long key = Keys.pack((int) at[0], (int) at[1], (int) at[2]);
+            BlockState state = cells.containsKey(key) ? decode(bytes) : null;
+            if (state != null) {
+                tiles.put(key, state);
+            }
+        });
+        return new Built(Clipboard.of(cells, params, tiles, raw.bounds()), unknown);
     }
 
     // ------------------------------------------------------------------ removing

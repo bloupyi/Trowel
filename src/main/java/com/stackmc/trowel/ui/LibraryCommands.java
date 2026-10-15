@@ -86,6 +86,11 @@ final class LibraryCommands {
                         });
                 Box selection = trowel.selection(player);
                 if (selection != null && !Commands.flags(args).contains("c")) {
+                    // Saving the selection reads the world: only where the player may build.
+                    String denied = trowel.host().denyEdit(player);
+                    if (denied != null) {
+                        throw new IllegalArgumentException(denied);
+                    }
                     if (selection.volume() > trowel.settings().maxBlocks(player)) {
                         throw new IllegalArgumentException("Selection too large: " + selection.volume()
                                 + " blocks, the maximum is " + trowel.settings().maxBlocks(player) + ".");

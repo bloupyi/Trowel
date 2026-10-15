@@ -20,6 +20,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChunkSnapshot;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -30,6 +32,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.LongFunction;
@@ -50,9 +56,27 @@ import java.util.logging.Level;
 public final class Engine {
 
     private final Trowel trowel;
+    /**
+     * Where operations compute. Bounded: ten builders running heavy operations at once wait their
+     * turn instead of taking every core from the server.
+     */
+    private final ExecutorService workers;
 
     public Engine(Trowel trowel) {
         this.trowel = trowel;
+        AtomicInteger count = new AtomicInteger();
+        int threads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() / 2));
+        this.workers = Executors.newFixedThreadPool(threads, task -> {
+            Thread thread = new Thread(task, "Trowel compute " + count.incrementAndGet());
+            thread.setDaemon(true);
+            thread.setPriority(Thread.NORM_PRIORITY - 1);
+            return thread;
+        });
+    }
+
+    /** Stops computing: operations under way are dropped, nothing they computed is placed. */
+    public void shutdown() {
+        workers.shutdownNow();
     }
 
     @FunctionalInterface
@@ -110,35 +134,43 @@ public final class Engine {
             }
         }
 
-        boolean protect = job.protect() && !session.isEditMarkers();
-        EditContext context = capture(player, job.world(), job.reads(), protect, global);
-        if (context == null) {
+        Box reads = area(player, job.world(), job.reads());
+        if (reads == NOWHERE) {
             return;
         }
-
-        session.setBusy(true);
-        session.setRunning(context.progress());
+        boolean protect = job.protect() && !session.isEditMarkers();
         boolean quiet = job.stroke() != null;
-        BukkitTask ticker = quiet ? null : showProgress(player, session, job.label(), context.progress());
-        Bukkit.getScheduler().runTaskAsynchronously(trowel.plugin(), () -> {
-            ChangeSet changes;
-            try {
-                changes = job.compute().run(context);
-            } catch (Throwable e) {
+        Progress progress = new Progress();
+        session.setBusy(true);
+        session.setRunning(progress);
+        BukkitTask ticker = quiet ? null : showProgress(player, session, job.label(), progress);
+        Mask filter = global;
+        capture(player, job.world(), reads, protect, filter, progress, context -> {
+            progress.phase("waiting for a free worker", 0);
+            workers.execute(() -> {
+                ChangeSet changes;
+                try {
+                    progress.phase("computing", 0);
+                    changes = job.compute().run(context);
+                } catch (Throwable e) {
+                    Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
+                        stop(ticker);
+                        abort(player, session, job.label(), e, quiet);
+                    });
+                    return;
+                }
                 Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
                     stop(ticker);
-                    abort(player, session, job.label(), e, quiet);
+                    try {
+                        apply(player, session, job, changes, context.progress());
+                    } catch (Throwable e) {
+                        abort(player, session, job.label(), e, quiet);
+                    }
                 });
-                return;
-            }
-            Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
-                stop(ticker);
-                try {
-                    apply(player, session, job, changes, context.progress());
-                } catch (Throwable e) {
-                    abort(player, session, job.label(), e, quiet);
-                }
             });
+        }, e -> {
+            stop(ticker);
+            abort(player, session, job.label(), e, quiet);
         });
     }
 
@@ -188,35 +220,42 @@ public final class Engine {
             Chat.error(player, "An operation is already running.");
             return;
         }
-        EditContext context = capture(player, world, box, false, null);
-        if (context == null) {
+        Box reads = area(player, world, box);
+        if (reads == NOWHERE) {
             return;
         }
+        Progress progress = new Progress();
         session.setBusy(true);
-        session.setRunning(context.progress());
-        context.progress().phase("reading", 0);
-        BukkitTask ticker = showProgress(player, session, label, context.progress());
-        Bukkit.getScheduler().runTaskAsynchronously(trowel.plugin(), () -> {
-            T result;
-            try {
-                result = compute.apply(context);
-            } catch (Throwable e) {
+        session.setRunning(progress);
+        BukkitTask ticker = showProgress(player, session, label, progress);
+        capture(player, world, reads, false, null, progress, context -> {
+            progress.phase("waiting for a free worker", 0);
+            workers.execute(() -> {
+                T result;
+                try {
+                    progress.phase("reading", 0);
+                    result = compute.apply(context);
+                } catch (Throwable e) {
+                    Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
+                        stop(ticker);
+                        abort(player, session, label, e, false);
+                    });
+                    return;
+                }
                 Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
                     stop(ticker);
-                    abort(player, session, label, e, false);
+                    session.setBusy(false);
+                    session.setRunning(null);
+                    try {
+                        then.accept(result);
+                    } catch (Throwable e) {
+                        abort(player, session, label, e);
+                    }
                 });
-                return;
-            }
-            Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
-                stop(ticker);
-                session.setBusy(false);
-                session.setRunning(null);
-                try {
-                    then.accept(result);
-                } catch (Throwable e) {
-                    abort(player, session, label, e);
-                }
             });
+        }, e -> {
+            stop(ticker);
+            abort(player, session, label, e, false);
         });
     }
 
@@ -267,55 +306,121 @@ public final class Engine {
                 + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "), nothing was placed.";
     }
 
-    /** Freezes what the operation will read. {@code null}, with a message, if it is too big. */
-    private EditContext capture(Player player, World world, Box reads, boolean protect, Mask global) {
-        int minY = world.getMinHeight();
-        int maxY = world.getMaxHeight() - 1;
-        Long2ObjectOpenHashMap<ChunkSnapshot> chunks = new Long2ObjectOpenHashMap<>();
-        Long2ObjectMap<Map<String, String>> params = new Long2ObjectOpenHashMap<>();
+    /** Returned by {@link #area} when the operation must not run (a message was sent). */
+    private static final Box NOWHERE = new Box(0, 0, 0, 0, 0, 0);
+
+    /**
+     * What the operation will read: cropped to the buildable area, and grown by the margin the
+     * algorithms look at. {@code null}: it reads nothing; {@link #NOWHERE}, with a message: too big
+     * or entirely outside.
+     */
+    private Box area(Player player, World world, Box reads) {
+        if (reads == null) {
+            return null;
+        }
         Box bounds = trowel.host().bounds(player, world);
-        if (reads != null && bounds != null) {
+        if (bounds != null) {
             // Nothing to read far from the buildable area: nothing would be placed, and reading loads chunks.
             reads = reads.intersect(bounds.grow(4));
             if (reads == null) {
                 Chat.error(player, "It is entirely outside the buildable area.");
-                return null;
+                return NOWHERE;
             }
         }
-        if (reads != null) {
-            Box box = reads.grow(2).withY(Math.max(minY, reads.minY() - 2), Math.min(maxY, reads.maxY() + 2));
-            long count = (long) ((box.maxX() >> 4) - (box.minX() >> 4) + 1) * ((box.maxZ() >> 4) - (box.minZ() >> 4) + 1);
-            if (count > trowel.settings().maxChunks(player)) {
-                Chat.error(player, "Area too large: " + count + " chunks to read, the maximum is "
-                        + trowel.settings().maxChunks(player) + ".");
-                return null;
+        int minY = world.getMinHeight();
+        int maxY = world.getMaxHeight() - 1;
+        Box box = reads.grow(2).withY(Math.max(minY, reads.minY() - 2), Math.min(maxY, reads.maxY() + 2));
+        long count = (long) ((box.maxX() >> 4) - (box.minX() >> 4) + 1) * ((box.maxZ() >> 4) - (box.minZ() >> 4) + 1);
+        if (count > trowel.settings().maxChunks(player)) {
+            Chat.error(player, "Area too large: " + count + " chunks to read, the maximum is "
+                    + trowel.settings().maxChunks(player) + ".");
+            return NOWHERE;
+        }
+        return box;
+    }
+
+    /**
+     * Freezes what the operation will read, then hands it to {@code ready} on the main thread.
+     *
+     * <p>Chunks are loaded asynchronously and frozen one by one as they arrive: a large area never
+     * holds the server while its chunks load or generate. Cancelling stops the wait.</p>
+     */
+    private void capture(Player player, World world, Box box, boolean protect, Mask global, Progress progress,
+                         Consumer<EditContext> ready, Consumer<Throwable> failed) {
+        Long2ObjectOpenHashMap<ChunkSnapshot> chunks = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<BlockState> tiles = new Long2ObjectOpenHashMap<>();
+        if (box == null) {
+            finishCapture(player, world, null, chunks, tiles, protect, global, progress, ready, failed);
+            return;
+        }
+        java.util.List<CompletableFuture<Void>> loads = new java.util.ArrayList<>();
+        for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
+            for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
+                long key = Views.chunkKey(cx, cz);
+                loads.add(world.getChunkAtAsync(cx, cz).thenAcceptAsync(chunk -> {
+                    if (!progress.cancelled()) {
+                        chunks.put(key, chunk.getChunkSnapshot(false, false, false));
+                        for (BlockState state : chunk.getTileEntities(block -> box.contains(block.getX(), block.getY(),
+                                block.getZ()), true)) {
+                            tiles.put(Keys.pack(state.getX(), state.getY(), state.getZ()), state);
+                        }
+                    }
+                }, this::onMain));
             }
-            for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
-                for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
-                    chunks.put(Views.chunkKey(cx, cz), world.getChunkAt(cx, cz).getChunkSnapshot(false, false, false));
+        }
+        progress.phase("loading " + loads.size() + " chunks", 0);
+        CompletableFuture.allOf(loads.toArray(CompletableFuture[]::new)).whenComplete((done, error) -> onMain(() -> {
+            if (error != null) {
+                failed.accept(error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                        ? error.getCause() : error);
+            } else if (progress.cancelled()) {
+                failed.accept(new Progress.Cancelled());
+            } else if (Bukkit.getWorld(world.getUID()) == null) {
+                failed.accept(new IllegalArgumentException("the world was closed while loading."));
+            } else {
+                finishCapture(player, world, box, chunks, tiles, protect, global, progress, ready, failed);
+            }
+        }));
+    }
+
+    private void finishCapture(Player player, World world, Box box, Long2ObjectOpenHashMap<ChunkSnapshot> chunks,
+                               Long2ObjectOpenHashMap<BlockState> tiles, boolean protect, Mask global,
+                               Progress progress, Consumer<EditContext> ready, Consumer<Throwable> failed) {
+        try {
+            int minY = world.getMinHeight();
+            int maxY = world.getMaxHeight() - 1;
+            MarkerSupport markers = trowel.host().markers();
+            Long2ObjectMap<Map<String, String>> params = box == null ? new Long2ObjectOpenHashMap<>()
+                    : markers.within(world, box);
+            LongOpenHashSet placed = new LongOpenHashSet();
+            BlockView bare = Views.snapshot(chunks, minY, maxY, trowel.air(), LongSets.EMPTY_SET);
+            for (long key : params.keySet().toLongArray()) {
+                if (markers.isMarker(bare.type(Keys.x(key), Keys.y(key), Keys.z(key)))) {
+                    placed.add(key);
+                } else {
+                    params.remove(key);
                 }
             }
-            params = trowel.host().markers().within(world, box);
+            BlockView view = Views.snapshot(chunks, minY, maxY, trowel.air(), placed);
+            ChangeSet.Gate gate = !protect && global == null ? null : (x, y, z, data) -> {
+                if (protect && view.marker(x, y, z) && view.type(x, y, z) != data.getMaterial()) {
+                    return false;
+                }
+                return global == null || global.test(x, y, z, view);
+            };
+            ready.accept(new EditContext(view, params, markers, trowel.host().bounds(player, world),
+                    trowel.settings().maxBlocks(player), gate, trowel.transforms(), trowel.air(), progress, tiles));
+        } catch (Throwable e) {
+            failed.accept(e);
         }
-        MarkerSupport markers = trowel.host().markers();
-        LongOpenHashSet placed = new LongOpenHashSet();
-        BlockView bare = Views.snapshot(chunks, minY, maxY, trowel.air(), LongSets.EMPTY_SET);
-        for (long key : params.keySet().toLongArray()) {
-            if (markers.isMarker(bare.type(Keys.x(key), Keys.y(key), Keys.z(key)))) {
-                placed.add(key);
-            } else {
-                params.remove(key);
-            }
+    }
+
+    private void onMain(Runnable task) {
+        if (Bukkit.isPrimaryThread()) {
+            task.run();
+        } else {
+            Bukkit.getScheduler().runTask(trowel.plugin(), task);
         }
-        BlockView view = Views.snapshot(chunks, minY, maxY, trowel.air(), placed);
-        ChangeSet.Gate gate = !protect && global == null ? null : (x, y, z, data) -> {
-            if (protect && view.marker(x, y, z) && view.type(x, y, z) != data.getMaterial()) {
-                return false;
-            }
-            return global == null || global.test(x, y, z, view);
-        };
-        return new EditContext(view, params, markers, bounds, trowel.settings().maxBlocks(player), gate,
-                trowel.transforms(), trowel.air(), new Progress());
     }
 
     // ------------------------------------------------------------------- place
@@ -324,7 +429,8 @@ public final class Engine {
         World world = job.world();
         Batch run = new Batch(world.getUID(), job.stroke(), Bukkit.getCurrentTick(), job.label());
         LongArrayList keys = new LongArrayList(changes.blocks().keySet());
-        write(player, world, keys, changes.blocks()::get, run, job.stroke() == null ? job.label() : null, progress,
+        write(player, world, keys, changes.blocks()::get, changes.tiles()::get, run,
+                job.stroke() == null ? job.label() : null, progress,
                 () -> finish(player, session, job, changes, run, progress.cancelled()),
                 e -> abort(player, session, job.label(), e));
     }
@@ -448,14 +554,14 @@ public final class Engine {
      * @param progress stops placing if the player cancels, or {@code null}
      */
     private void write(Player player, World world, LongArrayList keys, LongFunction<BlockData> wanted,
-                       Batch record, String label, Progress progress, Runnable done,
+                       LongFunction<BlockState> tiles, Batch record, String label, Progress progress, Runnable done,
                        Consumer<Throwable> failed) {
         int perTick = trowel.settings().blocksPerTick();
         int[] cursor = {0};
         UUID worldId = world.getUID();
         if (keys.size() <= perTick) {
             try {
-                writeSome(world, keys, wanted, record, cursor, perTick);
+                writeSome(world, keys, wanted, tiles, record, cursor, perTick);
             } catch (Throwable e) {
                 failed.accept(e);
                 return;
@@ -477,7 +583,7 @@ public final class Engine {
                         done.run();
                         return;
                     }
-                    writeSome(world, keys, wanted, record, cursor, perTick);
+                    writeSome(world, keys, wanted, tiles, record, cursor, perTick);
                     if (cursor[0] < keys.size()) {
                         if (label != null && player.isOnline()) {
                             subtitle(player, label + ": placing " + (100L * cursor[0] / keys.size()) + "% ("
@@ -495,27 +601,55 @@ public final class Engine {
         }.runTaskTimer(trowel.plugin(), 0L, 1L);
     }
 
-    private static void writeSome(World world, LongArrayList keys, LongFunction<BlockData> wanted, Batch record,
-                                  int[] cursor, int budget) {
+    /** Blocks that keep data of their own, by type: asked once per type, then remembered. */
+    private static final java.util.Map<org.bukkit.Material, Boolean> HAS_DATA = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static boolean hasData(BlockData data) {
+        return HAS_DATA.computeIfAbsent(data.getMaterial(), type -> data.createBlockState() instanceof TileState);
+    }
+
+    /**
+     * Places blocks within the budget. A block with data of its own (sign, chest, banner, head) keeps
+     * it in the history; one placed with data (a paste) gets it.
+     */
+    private static void writeSome(World world, LongArrayList keys, LongFunction<BlockData> wanted,
+                                  LongFunction<BlockState> tiles, Batch record, int[] cursor, int budget) {
         while (budget-- > 0 && cursor[0] < keys.size()) {
             long key = keys.getLong(cursor[0]++);
             BlockData data = wanted.apply(key);
             if (data == null) {
                 continue;
             }
+            BlockState tile = tiles.apply(key);
             Block block = world.getBlockAt(Keys.x(key), Keys.y(key), Keys.z(key));
             BlockData current = block.getBlockData();
-            if (current.equals(data)) {
+            if (current.equals(data) && tile == null) {
                 continue;
             }
+            BlockState previous = record == null || !hasData(current) ? null : block.getState(true);
             try {
                 block.setBlockData(data, false);
+                if (tile != null) {
+                    BlockState placed = tile.copy(block.getLocation());
+                    placed.setBlockData(data);
+                    placed.update(true, false);
+                }
             } catch (RuntimeException refused) {
                 continue;
             }
             if (record != null) {
-                record.before.putIfAbsent(key, current);
+                if (!record.before.containsKey(key)) {
+                    record.before.put(key, current);
+                    if (previous instanceof TileState) {
+                        record.tilesBefore.put(key, previous);
+                    }
+                }
                 record.after.put(key, data);
+                if (tile != null) {
+                    record.tilesAfter.put(key, block.getState(true));
+                } else {
+                    record.tilesAfter.remove(key);
+                }
             }
         }
     }
@@ -563,13 +697,17 @@ public final class Engine {
 
         Long2ObjectOpenHashMap<BlockData> blocks = undo ? batch.before : batch.after;
         Long2ObjectOpenHashMap<Map<String, String>> params = undo ? batch.paramsBefore : batch.paramsAfter;
+        Long2ObjectOpenHashMap<BlockState> tiles = undo ? batch.tilesBefore : batch.tilesAfter;
         session.setBusy(true);
+        Progress progress = new Progress();
+        session.setRunning(progress);
         String label = undo ? "Undo" : "Redo";
-        write(player, world, new LongArrayList(blocks.keySet()), blocks::get, null, label, null, () -> {
+        write(player, world, new LongArrayList(blocks.keySet()), blocks::get, tiles::get, null, label, progress, () -> {
             MarkerSupport markers = trowel.host().markers();
             params.forEach((key, values) -> markers.write(world, key, values));
             trowel.host().changed(world, !params.isEmpty());
             session.setBusy(false);
+            session.setRunning(null);
             Deque<Batch> to = undo ? session.getRedo() : session.getUndo();
             to.push(batch);
             while (to.size() > trowel.settings().undoSteps()) {
@@ -580,7 +718,9 @@ public final class Engine {
             if (bounds != null) {
                 trowel.hud().flash(player, world, bounds);
             }
-            if (times > 1) {
+            if (progress.cancelled()) {
+                Chat.hint(player, label + " stopped by //cancel: " + (undo ? "//redo" : "//undo") + " puts it all back.");
+            } else if (times > 1) {
                 step(player, undo, times - 1);
             }
         }, e -> abort(player, session, label, e));
@@ -601,16 +741,26 @@ public final class Engine {
      */
     public void undoOnly(Player player, int index) {
         Session session = trowel.session(player);
+        if (session.isBusy()) {
+            Chat.error(player, "An operation is already running.");
+            return;
+        }
         java.util.List<Batch> list = new java.util.ArrayList<>(session.getUndo());
         if (index < 1 || index > list.size()) {
             Chat.error(player, "There are only " + list.size() + " operation(s) in the history.");
             return;
         }
         Batch target = list.get(index - 1);
+        if (!target.world.equals(player.getWorld().getUID())) {
+            Chat.error(player, "This operation happened in another world: go back there to undo it.");
+            return;
+        }
         LongOpenHashSet later = new LongOpenHashSet();
         for (Batch newer : list.subList(0, index - 1)) {
-            later.addAll(newer.after.keySet());
-            later.addAll(newer.paramsAfter.keySet());
+            if (newer.world.equals(target.world)) {
+                later.addAll(newer.after.keySet());
+                later.addAll(newer.paramsAfter.keySet());
+            }
         }
         Batch part = new Batch(target.world, null, Bukkit.getCurrentTick(), "Undo of " + target.label);
         moveInto(target, part, key -> !later.contains(key), false);
@@ -624,6 +774,10 @@ public final class Engine {
     /** Undoes the last {@code count} operations, but only inside this box. */
     public void undoInside(Player player, Box box, int count) {
         Session session = trowel.session(player);
+        if (session.isBusy()) {
+            Chat.error(player, "An operation is already running.");
+            return;
+        }
         UUID world = player.getWorld().getUID();
         Batch part = new Batch(world, null, Bukkit.getCurrentTick(), "Undo inside the selection");
         int seen = 0;
@@ -660,19 +814,23 @@ public final class Engine {
      * state to place, and their current state to be able to redo. Going back in history
      * ({@code older}), the oldest state wins for placing, the most recent for redoing.
      */
-    private static void moveInto(Batch from, Batch part, java.util.function.LongPredicate keep, boolean older) {
+    static void moveInto(Batch from, Batch part, java.util.function.LongPredicate keep, boolean older) {
         for (long key : from.before.keySet().toLongArray()) {
             if (!keep.test(key)) {
                 continue;
             }
             if (older || !part.before.containsKey(key)) {
                 part.before.put(key, from.before.get(key));
+                putOrRemove(part.tilesBefore, key, from.tilesBefore.get(key));
             }
             if (!part.after.containsKey(key)) {
                 part.after.put(key, from.after.get(key));
+                putOrRemove(part.tilesAfter, key, from.tilesAfter.get(key));
             }
             from.before.remove(key);
             from.after.remove(key);
+            from.tilesBefore.remove(key);
+            from.tilesAfter.remove(key);
         }
         for (long key : from.paramsBefore.keySet().toLongArray()) {
             if (!keep.test(key)) {
@@ -686,6 +844,14 @@ public final class Engine {
             }
             from.paramsBefore.remove(key);
             from.paramsAfter.remove(key);
+        }
+    }
+
+    private static void putOrRemove(Long2ObjectOpenHashMap<BlockState> map, long key, BlockState state) {
+        if (state == null) {
+            map.remove(key);
+        } else {
+            map.put(key, state);
         }
     }
 
@@ -705,12 +871,16 @@ public final class Engine {
             return;
         }
         session.setBusy(true);
+        Progress progress = new Progress();
+        session.setRunning(progress);
         Long2ObjectOpenHashMap<BlockData> blocks = part.before;
-        write(player, world, new LongArrayList(blocks.keySet()), blocks::get, null, part.label, null, () -> {
+        write(player, world, new LongArrayList(blocks.keySet()), blocks::get, part.tilesBefore::get, null, part.label,
+                progress, () -> {
             MarkerSupport markers = trowel.host().markers();
             part.paramsBefore.forEach((key, values) -> markers.write(world, key, values));
             trowel.host().changed(world, !part.paramsBefore.isEmpty());
             session.setBusy(false);
+            session.setRunning(null);
             session.getRedo().push(part);
             Chat.info(player, part.label + ": ", Progress.blocks(part.before.size()));
             if (note != null) {

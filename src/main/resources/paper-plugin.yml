@@ -21,3 +21,6 @@ permissions:
   trowel.bypass.limit:
     description: "Ignore limits.max-blocks and limits.max-chunks"
     default: op
+  trowel.reload:
+    description: "Reload config.yml with /trowel reload"
+    default: op
