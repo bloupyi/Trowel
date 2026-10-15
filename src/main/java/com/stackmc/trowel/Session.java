@@ -26,6 +26,13 @@ public final class Session {
     private final Deque<Batch> undo = new ArrayDeque<>();
     private final Deque<Batch> redo = new ArrayDeque<>();
     private Clipboard clipboard;
+    /**
+     * //rotate always turns the clipboard as it was before the first rotation, by the total angle:
+     * free angles are approximate, and turning an already turned copy would add the errors up.
+     */
+    private Clipboard unrotated;
+    private Clipboard rotated;
+    private double rotation;
 
     private Location pos1;
     private Location pos2;

@@ -56,6 +56,8 @@ public final class AxiomBridge implements Listener {
     private final Map<UUID, Access> access = new ConcurrentHashMap<>();
     private final Map<UUID, PermissionAttachment> grants = new HashMap<>();
     private final Map<String, Method> getters = new ConcurrentHashMap<>();
+    /** Worlds Axiom changed since the last notice to the host. */
+    private final java.util.Set<UUID> edited = ConcurrentHashMap.newKeySet();
     private BukkitTask task;
     private Plugin axiom;
     private String failure;
@@ -98,6 +100,21 @@ public final class AxiomBridge implements Listener {
         HandlerList.unregisterAll(this);
     }
 
+    /**
+     * After a configuration reload: the permissions granted so far are taken back, and granted
+     * again with the configured node at the next refresh. {@code axiom.enabled} needs a restart.
+     */
+    public void reload() {
+        grants.forEach((id, attachment) -> {
+            detach(attachment);
+            Player player = Bukkit.getPlayer(id);
+            if (player != null) {
+                player.recalculatePermissions();
+            }
+        });
+        grants.clear();
+    }
+
     /** AxiomPaper may enable after us. */
     @EventHandler
     public void onPluginEnable(PluginEnableEvent event) {
@@ -131,6 +148,7 @@ public final class AxiomBridge implements Listener {
                         && where.allowsColumn(target.getWorld(), target.getBlockX(), target.getBlockZ());
             }, false);
             listen(loader, "AxiomUnknownTeleportEvent", (event, player) -> false, false);
+            watchEdits(loader);
             for (String name : List.of("AxiomFlySpeedChangeEvent", "AxiomTimeChangeEvent", "AxiomSpawnEntityEvent",
                     "AxiomManipulateEntityEvent", "AxiomRemoveEntityEvent")) {
                 listen(loader, name, (event, player) -> allowed(player), false);
@@ -276,6 +294,31 @@ public final class AxiomBridge implements Listener {
                 cancellable.setCancelled(true);
             }
         }, trowel.plugin(), false);
+    }
+
+    /**
+     * Tells the host when Axiom changed a world, as Trowel does after its own operations: the host
+     * knows the world must be saved. Several edits in the same tick give a single notice.
+     */
+    private void watchEdits(ClassLoader loader) throws ClassNotFoundException {
+        Class<? extends Event> type = Class.forName(BASE + "event.AxiomModifyWorldEvent", true, loader)
+                .asSubclass(Event.class);
+        Bukkit.getPluginManager().registerEvent(type, this, EventPriority.MONITOR, (listener, event) -> {
+            if (!type.isInstance(event) || (event instanceof Cancellable cancellable && cancellable.isCancelled())
+                    || !(call(event, "getWorld") instanceof World world)) {
+                return;
+            }
+            UUID id = world.getUID();
+            if (edited.add(id)) {
+                Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
+                    edited.remove(id);
+                    World still = Bukkit.getWorld(id);
+                    if (still != null) {
+                        trowel.host().changed(still, false);
+                    }
+                });
+            }
+        }, trowel.plugin(), true);
     }
 
     private Player playerOf(Event event) {

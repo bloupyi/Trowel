@@ -66,7 +66,7 @@ public final class NoClip {
     private void tick() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             Session session = trowel.existingSession(player);
-            boolean wanted = session != null && session.isNoclip();
+            boolean wanted = session != null && session.isNoclip() && trowel.host().denyEdit(player) == null;
             boolean ghost = ghosts.contains(player.getUniqueId());
             if (ghost && (player.getGameMode() != GameMode.SPECTATOR || !wanted)) {
                 if (player.getGameMode() == GameMode.SPECTATOR) {

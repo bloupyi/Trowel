@@ -5,6 +5,7 @@ import com.stackmc.trowel.api.MarkerSupport;
 import com.stackmc.trowel.api.ParamKind;
 import com.stackmc.trowel.api.TrowelHost;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -14,6 +15,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.HashMap;
 
 /**
  * Every registered host seen as one: each world is governed by the first host that handles it,
@@ -49,13 +52,16 @@ final class HostRegistry implements TrowelHost {
 
     private final Map<Plugin, TrowelHost> hosts = new LinkedHashMap<>();
     private final MarkerSupport markers = new Markers();
+    private final Map<UUID, Verdict> verdicts = new HashMap<>();
 
     void register(Plugin owner, TrowelHost host) {
         hosts.put(owner, host);
+        verdicts.clear();
     }
 
     void unregister(Plugin owner) {
         hosts.remove(owner);
+        verdicts.clear();
     }
 
     /** The host that governs this world. */
@@ -74,9 +80,28 @@ final class HostRegistry implements TrowelHost {
         return all;
     }
 
+    /**
+     * Asked many times per tick (display, Axiom, noclip, commands): the host answers once per player,
+     * world and tick.
+     */
     @Override
     public String denyEdit(Player player) {
-        return of(player.getWorld()).denyEdit(player);
+        int tick = Bukkit.getCurrentTick();
+        World world = player.getWorld();
+        Verdict known = verdicts.get(player.getUniqueId());
+        if (known != null && known.tick() == tick && known.world().equals(world.getUID())) {
+            return known.reason();
+        }
+        String reason = of(world).denyEdit(player);
+        verdicts.put(player.getUniqueId(), new Verdict(tick, world.getUID(), reason));
+        return reason;
+    }
+
+    void forget(Player player) {
+        verdicts.remove(player.getUniqueId());
+    }
+
+    private record Verdict(int tick, UUID world, String reason) {
     }
 
     @Override

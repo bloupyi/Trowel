@@ -5,6 +5,7 @@ import com.stackmc.trowel.api.Keys;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 
 import java.util.Map;
@@ -28,6 +29,9 @@ public final class Batch {
     final Long2ObjectOpenHashMap<BlockData> after = new Long2ObjectOpenHashMap<>();
     final Long2ObjectOpenHashMap<Map<String, String>> paramsBefore = new Long2ObjectOpenHashMap<>();
     final Long2ObjectOpenHashMap<Map<String, String>> paramsAfter = new Long2ObjectOpenHashMap<>();
+    /** Data of the blocks that have some (sign text, chest content...), before and after. */
+    final Long2ObjectOpenHashMap<BlockState> tilesBefore = new Long2ObjectOpenHashMap<>();
+    final Long2ObjectOpenHashMap<BlockState> tilesAfter = new Long2ObjectOpenHashMap<>();
 
     Batch(UUID world, String stroke, int tick, String label) {
         this.world = world;
@@ -64,6 +68,12 @@ public final class Batch {
 
     /** Adds a following brush stroke: the oldest before state wins, the newest after state too. */
     void absorb(Batch next) {
+        // A block's data goes with its state: only the positions this batch had not touched yet take the older data.
+        next.tilesBefore.forEach((key, state) -> {
+            if (!before.containsKey((long) key)) {
+                tilesBefore.put((long) key, state);
+            }
+        });
         next.before.forEach(before::putIfAbsent);
         after.putAll(next.after);
         for (Long2ObjectMap.Entry<Map<String, String>> entry : next.paramsBefore.long2ObjectEntrySet()) {
@@ -72,6 +82,10 @@ public final class Batch {
             }
         }
         paramsAfter.putAll(next.paramsAfter);
+        for (long key : next.after.keySet()) {
+            tilesAfter.remove(key);
+        }
+        tilesAfter.putAll(next.tilesAfter);
         lastTick = next.lastTick;
     }
 

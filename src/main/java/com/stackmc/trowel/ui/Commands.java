@@ -54,6 +54,7 @@ import java.util.stream.Collectors;
 public final class Commands {
 
     public static final String PERMISSION = "trowel.use";
+    public static final String RELOAD_PERMISSION = "trowel.reload";
 
     public static final String PATTERN_HELP = "Patterns: stone, oak_slab[type=top], 60%stone,40%andesite, a marker "
             + "(checkpoint), #hand, #hotbar, #aim, ##magma (ordered palettes: //palette list), #noise[palette][noise], "
@@ -205,7 +206,7 @@ public final class Commands {
             Chat.error(player, "Unknown action: " + name + ". //help for the list.");
             return;
         }
-        if (!Set.of("help", "axiom", "palettes", "functions", "cancel", "schem", "pattern", "mask", "coedit")
+        if (!Set.of("help", "axiom", "palettes", "functions", "cancel", "schem", "pattern", "mask", "coedit", "reload")
                 .contains(action.name())) {
             String denied = trowel.host().denyEdit(player);
             if (denied != null) {
@@ -460,7 +461,15 @@ public final class Commands {
             if (session.getClipboard() == null) {
                 throw new IllegalArgumentException("Empty clipboard: //copy first.");
             }
-            session.setClipboard(session.getClipboard().rotated(angle, trowel.host().markers(), trowel.transforms()));
+            if (session.getRotated() != session.getClipboard()) {
+                session.setUnrotated(session.getClipboard());
+                session.setRotation(0);
+            }
+            double total = (session.getRotation() + angle) % 360;
+            Clipboard turned = session.getUnrotated().rotated(total, trowel.host().markers(), trowel.transforms());
+            session.setRotation(total);
+            session.setRotated(turned);
+            session.setClipboard(turned);
             Chat.info(p, "Rotated by " + raw.trim() + " degrees. Clipboard: ", session.getClipboard().size());
         }, args("word:90|180|270|45"));
         add("flip", CLIPBOARD, "//flip [direction]", "Flips the clipboard, towards where you look by default.", (p, a) -> {
@@ -549,6 +558,13 @@ public final class Commands {
         add("menu|tools", SETTINGS, "//menu", "Every operation, in a window (also on the G key).",
                 (p, a) -> trowel.dialogs().openHub(p), null);
         add("help", SETTINGS, "//help", "This help.", (p, a) -> help(p), null);
+        add("reload", SETTINGS, "/trowel reload", "Reads config.yml again (" + RELOAD_PERMISSION + ").", (p, a) -> {
+            if (!p.hasPermission(RELOAD_PERMISSION)) {
+                throw new IllegalArgumentException("You are not allowed to reload Trowel.");
+            }
+            trowel.reload();
+            Chat.info(p, "Configuration reloaded. ", "axiom.enabled still needs a restart.");
+        }, null);
         new AdvancedCommands(trowel, this).define();
         new SculptCommands(trowel, this).define();
         new ToolCommands(trowel, this).define();

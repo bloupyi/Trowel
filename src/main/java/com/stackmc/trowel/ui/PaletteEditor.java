@@ -167,7 +167,12 @@ public final class PaletteEditor implements Listener {
             return;
         }
         Inventory top = editor.inventory;
-        if (event.getClickedInventory() != null && event.getClickedInventory() != top) {
+        // The slots hold copies: dropping one outside the window, or cloning it, would hand out a free item.
+        if (event.getClickedInventory() == null || event.getClick() == org.bukkit.event.inventory.ClickType.MIDDLE) {
+            event.setCancelled(true);
+            return;
+        }
+        if (event.getClickedInventory() != top) {
             event.setCancelled(true);
             ItemStack clicked = event.getCurrentItem();
             if (clicked != null && clicked.getType().isBlock() && !clicked.getType().isAir()) {

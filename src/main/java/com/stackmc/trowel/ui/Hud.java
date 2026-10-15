@@ -114,21 +114,27 @@ public final class Hud {
             if (builders.size() < 2) {
                 continue;
             }
+            List<Player> viewers = new ArrayList<>();
+            for (Player viewer : builders) {
+                Session mine = trowel.existingSession(viewer);
+                if (mine != null && mine.isCoeditShow()) {
+                    viewers.add(viewer);
+                }
+            }
+            if (viewers.isEmpty()) {
+                continue;
+            }
             for (Player shown : builders) {
                 Session theirs = trowel.existingSession(shown);
-                if (theirs == null || !theirs.isCoeditShare()) {
+                if (theirs == null || !theirs.isCoeditShare() || (viewers.size() == 1 && viewers.get(0).equals(shown))) {
                     continue;
                 }
                 Particle.DustOptions color = colorFor(shown);
                 Box selection = theirs.selection(shown.getWorld());
                 Block aimed = trowel.items().kind(shown.getInventory().getItemInMainHand()) == null ? null
                         : shown.getTargetBlockExact(trowel.settings().reach());
-                for (Player viewer : builders) {
+                for (Player viewer : viewers) {
                     if (viewer.equals(shown)) {
-                        continue;
-                    }
-                    Session mine = trowel.existingSession(viewer);
-                    if (mine == null || !mine.isCoeditShow()) {
                         continue;
                     }
                     if (selection != null && selection.volume() <= 2_000_000L) {
