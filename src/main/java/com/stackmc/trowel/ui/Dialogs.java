@@ -198,7 +198,8 @@ public final class Dialogs implements Listener {
         if (box == null) {
             screen.line("No selection. Wand: left click and right click, from afar too.");
         } else {
-            screen.line("Selection: " + box.size() + " (" + box.volume() + " blocks)");
+            screen.line((session.polygonal(player.getWorld()) ? "Polygon of " + session.getPolygonPoints().size()
+                    + " points: " : "Selection: ") + box.size() + " (" + trowel.commands().volume(player, box) + " blocks)");
             screen.line("From " + box.minX() + " " + box.minY() + " " + box.minZ() + " to "
                     + box.maxX() + " " + box.maxY() + " " + box.maxZ());
         }
@@ -208,6 +209,9 @@ public final class Dialogs implements Listener {
                 .choice("dir", "Direction", DIRECTIONS, "me")
                 .text("mask", "Mask to count", "#existing");
         screen.stay("Wand", "//wand", in -> "wand")
+                .stay("Polygon wand", "//poly: right click adds a point, left click removes the last", in -> "poly")
+                .stay("Polygon point: my feet", "//poly add", in -> "poly add")
+                .stay("Polygon: remove last point", "//poly undo", in -> "poly undo")
                 .stay("Corner 1: my feet", "//pos1", in -> "pos1")
                 .stay("Corner 2: my feet", "//pos2", in -> "pos2")
                 .stay("Corner 1: aimed block", "//hpos1", in -> "hpos1")

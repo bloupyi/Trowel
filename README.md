@@ -121,6 +121,14 @@ First steps:
 | `//enc <mask>` | Shrinks the selection around what the mask selects |
 | `//selnear <radius> <mask>` | Selects what the mask selects around you |
 | `//count <mask>`, `//distr` | Count, block distribution |
+| `//poly`, `//poly add [x y z]`, `//poly undo`, `//poly clear` | Polygon wand; adds a point (your feet), removes the last, clears |
+
+**The polygon wand** (`//poly`, a breeze rod) draws a polygon seen from above, up to 100 points:
+right click adds the aimed block, left click removes the last point, sneak + left click clears.
+It closes by itself. The height goes from the lowest to the highest point: `//expand vert` or
+`//expand <n> up` to raise it, the polygon stays. Operations on the selection (`//set`, `//replace`,
+`//copy`, `//cut`, `//count`, sculpting...) only touch its inside; pushing a side (`//expand <n> east`,
+`//shift`) or clicking a corner with the axe makes it a box again.
 
 The **direction** is `me` (where you look, the default), `up`, `down`, `north`, `south`, `east`, `west`,
 or a diagonal: `northeast`, `northwest`, `southeast`, `southwest` (`ne`, `nw`, `se`, `sw`), or several joined

@@ -223,6 +223,7 @@ final class ToolCommands {
             d = new int[]{-d[0], -d[1], -d[2]};
         }
         Box box = c.region(player);
+        c.unclip();
         int[] dir = d;
         int count = n;
         boolean replace = flags.contains("r");
@@ -267,6 +268,7 @@ final class ToolCommands {
             end = -end;
         }
         Box box = c.region(player);
+        c.unclip();
         Block center = Commands.feet(player);
         double cx = center.getX() + 0.5;
         double cz = center.getZ() + 0.5;

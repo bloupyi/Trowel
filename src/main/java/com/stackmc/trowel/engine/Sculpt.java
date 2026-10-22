@@ -1,7 +1,10 @@
 package com.stackmc.trowel.engine;
 
 import com.stackmc.trowel.api.Box;
+import com.stackmc.trowel.api.Keys;
 import com.stackmc.trowel.geom.NoiseSpec;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongSets;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 
@@ -581,6 +584,9 @@ public final class Sculpt {
      * @param taper  size factor at the end of the axis (1: none), tapering from the base
      */
     public static Engine.Compute rotate(Box region, char axis, double angle, boolean twist, double taper) {
+        if (!twist && taper == 1) {
+            return context -> turn(context, region, axis == 'x' ? 0 : axis == 'z' ? 2 : 1, angle);
+        }
         return context -> {
             ChangeSet changes = context.changes();
             BlockView view = context.view();
@@ -624,6 +630,50 @@ public final class Sculpt {
             }
             return changes;
         };
+    }
+
+    /**
+     * A plain rotation, by {@link Clipboard#turnFreely}: the axis stands for the vertical, the
+     * plane of the rotation for the ground. Blocks turned out of the selection are dropped.
+     */
+    private static ChangeSet turn(EditContext context, Box region, int along, double angle) {
+        int[] size = {region.width(), region.height(), region.depth()};
+        if (size[along] > 2000) {
+            throw new IllegalArgumentException("Too long along the axis: " + size[along] + " blocks, 2000 at most.");
+        }
+        int i = along == 0 ? 1 : 0;
+        int j = along == 2 ? 1 : 2;
+        BlockView view = context.view();
+        context.progress().phase("reading", 0);
+        Long2ObjectOpenHashMap<BlockData> cells = new Long2ObjectOpenHashMap<>();
+        for (int x = region.minX(); x <= region.maxX(); x++) {
+            for (int y = region.minY(); y <= region.maxY(); y++) {
+                for (int z = region.minZ(); z <= region.maxZ(); z++) {
+                    int[] p = {x - region.minX(), y - region.minY(), z - region.minZ()};
+                    cells.put(Keys.pack(p[i], p[along], p[j]), view.get(x, y, z));
+                }
+            }
+        }
+        context.progress().phase("rotation", 0);
+        Long2ObjectOpenHashMap<BlockData> turned = Clipboard.turnFreely(cells, angle, (size[i] - 1) / 2.0,
+                (size[j] - 1) / 2.0, data -> data.getMaterial().isAir(), data -> data.getMaterial().isSolid(),
+                LongSets.EMPTY_SET);
+        ChangeSet changes = context.changes();
+        for (int x = region.minX(); x <= region.maxX(); x++) {
+            for (int y = region.minY(); y <= region.maxY(); y++) {
+                for (int z = region.minZ(); z <= region.maxZ(); z++) {
+                    int[] p = {x - region.minX(), y - region.minY(), z - region.minZ()};
+                    BlockData value = turned.get(Keys.pack(p[i], p[along], p[j]));
+                    if (value == null) {
+                        value = context.air();
+                    }
+                    if (!value.equals(view.get(x, y, z))) {
+                        changes.set(x, y, z, value);
+                    }
+                }
+            }
+        }
+        return changes;
     }
 
     private static long hexCell(double x, double z) {

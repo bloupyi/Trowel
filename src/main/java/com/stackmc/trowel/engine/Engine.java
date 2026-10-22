@@ -92,23 +92,28 @@ public final class Engine {
      * @param stroke  a brush stroke: silent, and merged with the neighbouring strokes of the same gesture
      */
     public record Job(String label, World world, Box reads, Compute compute, boolean protect, String stroke,
-                      Consumer<Integer> then) {
+                      Consumer<Integer> then, Mask clip) {
 
         public static Job of(String label, World world, Box reads, Compute compute) {
-            return new Job(label, world, reads, compute, true, null, null);
+            return new Job(label, world, reads, compute, true, null, null, null);
         }
 
         /** Markers are part of what is placed: copy, move, undo. */
         public Job unprotected() {
-            return new Job(label, world, reads, compute, false, stroke, then);
+            return new Job(label, world, reads, compute, false, stroke, then, clip);
         }
 
         public Job stroke(String key) {
-            return new Job(label, world, reads, compute, protect, key, then);
+            return new Job(label, world, reads, compute, protect, key, then, clip);
         }
 
         public Job then(Consumer<Integer> next) {
-            return new Job(label, world, reads, compute, protect, stroke, next);
+            return new Job(label, world, reads, compute, protect, stroke, next, clip);
+        }
+
+        /** Places nothing outside this mask: the polygon of a polygonal selection. */
+        public Job clip(Mask mask) {
+            return new Job(label, world, reads, compute, protect, stroke, then, mask);
         }
     }
 
@@ -144,7 +149,7 @@ public final class Engine {
         session.setBusy(true);
         session.setRunning(progress);
         BukkitTask ticker = quiet ? null : showProgress(player, session, job.label(), progress);
-        Mask filter = global;
+        Mask filter = job.clip() == null ? global : global == null ? job.clip() : global.and(job.clip());
         capture(player, job.world(), reads, protect, filter, progress, context -> {
             progress.phase("waiting for a free worker", 0);
             workers.execute(() -> {

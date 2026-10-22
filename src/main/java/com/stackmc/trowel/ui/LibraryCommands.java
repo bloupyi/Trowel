@@ -97,9 +97,10 @@ final class LibraryCommands {
                     }
                     org.bukkit.World world = player.getWorld();
                     org.bukkit.block.Block origin = Commands.feet(player);
+                    com.stackmc.trowel.geom.Polygon polygon = trowel.session(player).polygon(world);
                     trowel.engine().read(player, world, selection, "Copy",
-                            context -> Clipboard.copy(context, selection, world.getUID(), origin.getX(), origin.getY(),
-                                    origin.getZ()),
+                            context -> Clipboard.copy(context, selection, polygon, world.getUID(), origin.getX(),
+                                    origin.getY(), origin.getZ()),
                             clipboard -> {
                                 trowel.session(player).setClipboard(clipboard);
                                 store.accept(clipboard);
