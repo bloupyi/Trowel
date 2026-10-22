@@ -13,6 +13,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import org.bukkit.Material;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
@@ -230,6 +231,18 @@ public final class Clipboard {
             long target = turnPoint(entry.getLongKey(), rest);
             turned.put(target, data);
             turnedTiles.put(target, entry.getValue());
+        }
+        // Fences, panes and walls kept the links of their old neighbours: connect them to the new ones.
+        BlockData air = Material.AIR.createBlockData();
+        BlockView view = (x, y, z) -> {
+            BlockData data = turned.get(Keys.pack(x, y, z));
+            return data == null ? air : data;
+        };
+        for (long key : turned.keySet().toLongArray()) {
+            BlockData linked = RegionOps.reconnect(view, Keys.x(key), Keys.y(key), Keys.z(key));
+            if (linked != null) {
+                turned.put(key, linked);
+            }
         }
         return new Clipboard(turned, turnedParams, turnedTiles, boundsOf(turned), world, originX, originY, originZ);
     }

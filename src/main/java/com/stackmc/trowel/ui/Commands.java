@@ -23,6 +23,7 @@ import com.stackmc.trowel.pattern.Pattern;
 import com.stackmc.trowel.pattern.Patterns;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -472,16 +473,40 @@ public final class Commands {
             if (session.getClipboard() == null) {
                 throw new IllegalArgumentException("Empty clipboard: //copy first.");
             }
+            if (session.isBusy()) {
+                throw new IllegalArgumentException("An operation is already running.");
+            }
             if (session.getRotated() != session.getClipboard()) {
                 session.setUnrotated(session.getClipboard());
                 session.setRotation(0);
             }
             double total = (session.getRotation() + angle) % 360;
-            Clipboard turned = session.getUnrotated().rotated(total, trowel.host().markers(), trowel.transforms());
-            session.setRotation(total);
-            session.setRotated(turned);
-            session.setClipboard(turned);
-            Chat.info(p, "Rotated by " + raw.trim() + " degrees. Clipboard: ", session.getClipboard().size());
+            Clipboard source = session.getUnrotated();
+            // A free angle resamples every block: computed off the main thread, the server does not stall.
+            session.setBusy(true);
+            Bukkit.getScheduler().runTaskAsynchronously(trowel.plugin(), () -> {
+                Clipboard turned = null;
+                Throwable error = null;
+                try {
+                    turned = source.rotated(total, trowel.host().markers(), trowel.transforms());
+                } catch (Throwable e) {
+                    error = e;
+                }
+                Clipboard done = turned;
+                Throwable failed = error;
+                Bukkit.getScheduler().runTask(trowel.plugin(), () -> {
+                    session.setBusy(false);
+                    if (failed != null) {
+                        trowel.plugin().getLogger().log(java.util.logging.Level.WARNING, "//rotate failed", failed);
+                        Chat.error(p, "Rotation failed: " + failed.getMessage());
+                        return;
+                    }
+                    session.setRotation(total);
+                    session.setRotated(done);
+                    session.setClipboard(done);
+                    Chat.info(p, "Rotated by " + raw.trim() + " degrees. Clipboard: ", done.size());
+                });
+            });
         }, args("word:90|180|270|45"));
         add("flip", CLIPBOARD, "//flip [direction]", "Flips the clipboard, towards where you look by default.", (p, a) -> {
             int[] d = direction(p, a.length > 0 ? a[0] : null);
