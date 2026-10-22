@@ -35,6 +35,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -340,14 +341,22 @@ public final class Commands {
             Mask mask = a.length > 1 ? mask(p, join(a, 1)) : null;
             run(p, "Smooth", box, RegionOps.smooth(box, passes, mask));
         }, args("n:2", "mask"));
-        add("move", REGION, "//move <n> [direction]", "Moves the selection and its content, markers included.", (p, a) -> {
+        add("move", REGION, "//move <n> [direction]", "Moves the selection and its content, markers included. me: exactly where you look.", (p, a) -> {
             Box box = region(p);
             int n = integer(need(a, 0, "//move <n> [direction]"), 1, 256, "Distance");
-            int[] d = direction(p, a.length > 1 ? a[1] : null);
-            Box moved = box.shift(d[0] * n, d[1] * n, d[2] * n);
+            String raw = a.length > 1 ? a[1] : null;
+            int[] o;
+            if ("me".equalsIgnoreCase(raw)) {
+                Vector look = p.getLocation().getDirection().multiply(n);
+                o = new int[]{(int) Math.round(look.getX()), (int) Math.round(look.getY()), (int) Math.round(look.getZ())};
+            } else {
+                int[] d = direction(p, raw);
+                o = new int[]{d[0] * n, d[1] * n, d[2] * n};
+            }
+            Box moved = box.shift(o[0], o[1], o[2]);
             World world = p.getWorld();
             trowel.engine().submit(p, Engine.Job.of("Move", world, box.union(moved),
-                    RegionOps.move(box, d[0] * n, d[1] * n, d[2] * n)).unprotected().then(count -> {
+                    RegionOps.move(box, o[0], o[1], o[2])).unprotected().then(count -> {
                 trowel.session(p).select(world, moved);
                 trowel.hud().showSelection(p);
             }));

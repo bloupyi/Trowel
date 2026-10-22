@@ -133,6 +133,8 @@ It closes by itself. The height goes from the lowest to the highest point: `//ex
 The **direction** is `me` (where you look, the default), `up`, `down`, `north`, `south`, `east`, `west`,
 or a diagonal: `northeast`, `northwest`, `southeast`, `southwest` (`ne`, `nw`, `se`, `sw`), or several joined
 by commas, like `north,up` or `ne,down`. `//stack` then offsets each copy by the selection's size on every axis.
+`me` snaps to up, down or the nearest side, except with `//move <n> me`, which follows your exact look
+(any yaw and pitch); `//move <n>` alone keeps the snapped direction.
 
 ---
 
@@ -533,7 +535,7 @@ Roof, road, river and dashes follow the spline points.
 | `//copy`, `//cut` | Copies around your feet, markers included |
 | `//paste [-a] [-o] [-s]` | Pastes at your feet; `-a` without air, `-o` at the original place, `-s` selects |
 | `//rotate <degrees>`, `//flip [direction]` | Rotates by any angle (40, 77...), flips (marker settings too); fences, panes and walls reconnect after a free angle, computed off the main thread |
-| `//move <n> [direction]` | Moves the selection and its content |
+| `//move <n> [direction]` | Moves the selection and its content; `me` moves it exactly where you look, at any angle (the look direction times `n`, rounded to whole blocks) |
 | `//stack <count> [direction] [-a]` | Repeats the selection |
 
 ### The schematic library
