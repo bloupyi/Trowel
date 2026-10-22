@@ -198,41 +198,61 @@ public final class Textures {
         return volume == 0 ? 0 : (count - 1) / (double) Math.max(1, volume - 1);
     }
 
+    private static final int[][] FACES = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+
     /**
-     * Ambient, like ezEdits: the share of solid blocks in a ball around the block. A flat surface
-     * is half buried and lands in the middle of the palette, edges and bumps towards its end,
-     * hollows and nooks towards its start.
+     * Ambient, like ezEdits, measured from each face of the block open to air, so walls, ceilings
+     * and ground read the same whatever their thickness or orientation. In front of the face,
+     * solid blocks make a hollow (start of the palette); in the plane of the face, air makes an
+     * edge (end of the palette). A flat surface lands in the middle. The block takes the mean of
+     * its open faces; a buried block counts as a hollow.
      */
     static double ambient(Sculpt.Grid g, int x, int y, int z, double radius) {
         int r = (int) Math.ceil(radius);
         double r2 = radius * radius + 0.5;
-        int solid = 0;
-        int total = 0;
-        int flat = 0;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    if ((dx == 0 && dy == 0 && dz == 0) || dx * dx + dy * dy + dz * dz > r2) {
-                        continue;
-                    }
-                    total++;
-                    if (dy <= 0) {
-                        flat++;
-                    }
-                    int ax = x + dx;
-                    int ay = y + dy;
-                    int az = z + dz;
-                    if (g.contains(ax, ay, az) && g.solid[g.index(ax, ay, az)]) {
-                        solid++;
+        double sum = 0;
+        int faces = 0;
+        for (int[] f : FACES) {
+            if (solid(g, x + f[0], y + f[1], z + f[2])) {
+                continue;
+            }
+            int front = 0;
+            int blocked = 0;
+            int plane = 0;
+            int open = 0;
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dy = -r; dy <= r; dy++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        if ((dx == 0 && dy == 0 && dz == 0) || dx * dx + dy * dy + dz * dz > r2) {
+                            continue;
+                        }
+                        int along = dx * f[0] + dy * f[1] + dz * f[2];
+                        if (along < 0) {
+                            continue;
+                        }
+                        boolean s = solid(g, x + dx, y + dy, z + dz);
+                        if (along > 0) {
+                            front++;
+                            if (s) {
+                                blocked++;
+                            }
+                        } else {
+                            plane++;
+                            if (!s) {
+                                open++;
+                            }
+                        }
                     }
                 }
             }
+            sum += 0.5 + (plane == 0 ? 0 : open / (double) plane) - (front == 0 ? 0 : blocked / (double) front);
+            faces++;
         }
-        if (total == 0) {
-            return 0.5;
-        }
-        // Measured against flat ground, whose own layer counts as solid.
-        return Math.max(0, Math.min(1, 0.5 - (solid - flat) / (double) total * 2));
+        return faces == 0 ? 0 : Math.max(0, Math.min(1, sum / faces));
+    }
+
+    private static boolean solid(Sculpt.Grid g, int x, int y, int z) {
+        return g.contains(x, y, z) && g.solid[g.index(x, y, z)];
     }
 
     /** The normal of a surface: the sum of directions towards air, within the radius. */
