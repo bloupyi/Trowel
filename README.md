@@ -491,6 +491,7 @@ Settings: `radius:3`, `brightness:0.1`, `contrast:0.5`, `dir:0.3,-1,0.2`, `inter
 | `//moss <pattern> [amount %] [smoothing]` | Moss patches |
 | `//fill <pattern> <radius> [depth]` | Fills the hole you stand in |
 | `//replacenear`, `//removenear`, `//removeabove`, `//removebelow` | Around you, no selection needed |
+| `//up <height>` | Goes up that many blocks and stands on a glass block (placed only over air), like WorldEdit |
 
 ---
 

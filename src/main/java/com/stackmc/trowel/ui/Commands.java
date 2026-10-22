@@ -431,6 +431,8 @@ public final class Commands {
                 (p, a) -> column(p, a, true), args("n:2", "n:16"));
         add("removebelow", NEAR, "//removebelow [radius] [depth]", "Clears below your feet.",
                 (p, a) -> column(p, a, false), args("n:2", "n:16"));
+        add("up", NEAR, "//up <height>", "Goes up and stands on a glass block, like WorldEdit.",
+                (p, a) -> up(p, integer(need(a, 0, "//up <height>"), 1, 4096, "Height")), args("n:5"));
         add("fill", NEAR, "//fill <pattern> <radius> [depth]",
                 "Fills the hole you stand in, spreading and going down, never up.", (p, a) -> {
                     Pattern pattern = pattern(p, need(a, 0, "//fill <pattern> <radius> [depth]"));
@@ -808,6 +810,33 @@ public final class Commands {
                 : new Box(f.getX() - r, f.getY() - height, f.getZ() - r, f.getX() + r, f.getY() - 1, f.getZ() + r);
         org.bukkit.block.data.BlockData air = trowel.air();
         run(player, above ? "Clear above" : "Clear below", box, RegionOps.set(box, (x, y, z) -> air));
+    }
+
+    private void up(Player player, int height) {
+        World world = player.getWorld();
+        Block f = feet(player);
+        int y = f.getY() + height;
+        if (y + 1 >= world.getMaxHeight()) {
+            throw new IllegalArgumentException("Too high: the world stops at y " + (world.getMaxHeight() - 1) + ".");
+        }
+        for (int i = f.getY() + 2; i <= y + 1; i++) {
+            if (!world.getBlockAt(f.getX(), i, f.getZ()).isPassable()) {
+                throw new IllegalArgumentException("There is a block in the way at y " + i + ".");
+            }
+        }
+        Block floor = world.getBlockAt(f.getX(), y - 1, f.getZ());
+        if (floor.getType().isAir()) {
+            Box bounds = trowel.host().bounds(player, world);
+            if (bounds != null && !bounds.contains(floor.getX(), floor.getY(), floor.getZ())) {
+                throw new IllegalArgumentException("The glass block would be outside the buildable area.");
+            }
+            floor.setType(Material.GLASS);
+            trowel.host().changed(world, false);
+        }
+        Location to = player.getLocation();
+        to.setY(y);
+        player.teleport(to);
+        Chat.info(player, "Up " + height + " blocks.");
     }
 
     private void axiomStatus(Player player) {
