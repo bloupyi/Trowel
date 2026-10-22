@@ -195,14 +195,18 @@ public final class Hud {
 
     private void drawSelection(Player player, Session session, World world) {
         Box box = session.selection(world);
-        if (box != null) {
-            box(player, box, SELECTION);
-        }
-        if (session.getPos1() != null && world.equals(session.getPos1().getWorld())) {
-            cube(player, session.getPos1(), FIRST);
-        }
-        if (session.getPos2() != null && world.equals(session.getPos2().getWorld())) {
-            cube(player, session.getPos2(), SECOND);
+        if (box != null && session.polygonal(world)) {
+            polygon(player, session.getPolygonPoints(), box);
+        } else {
+            if (box != null) {
+                box(player, box, SELECTION);
+            }
+            if (session.getPos1() != null && world.equals(session.getPos1().getWorld())) {
+                cube(player, session.getPos1(), FIRST);
+            }
+            if (session.getPos2() != null && world.equals(session.getPos2().getWorld())) {
+                cube(player, session.getPos2(), SECOND);
+            }
         }
         drawPoints(player, session, world);
         for (java.util.List<Location> frame : session.getFrames()) {
@@ -289,6 +293,32 @@ public final class Hud {
         for (int i = 0; i < curve.size(); i += step) {
             double[] p = curve.point(i);
             player.spawnParticle(Particle.DUST, p[0], p[1], p[2], 1, 0, 0, 0, 0, CURVE);
+        }
+    }
+
+    /** The polygon at the bottom and top of the selection, its points, and an upright at each of them. */
+    private void polygon(Player player, java.util.List<Location> points, Box box) {
+        double y1 = box.minY();
+        double y2 = box.maxY() + 1;
+        int n = points.size();
+        double perimeter = 0;
+        for (int i = 0; i < n; i++) {
+            Location a = points.get(i);
+            Location b = points.get((i + 1) % n);
+            perimeter += Math.hypot(b.getBlockX() - a.getBlockX(), b.getBlockZ() - a.getBlockZ());
+        }
+        double spacing = Math.max(0.5, (2 * perimeter + n * (y2 - y1)) / MAX_EDGE_POINTS);
+        for (int i = 0; i < n; i++) {
+            Location a = points.get(i);
+            Location b = points.get((i + 1) % n);
+            double ax = a.getBlockX() + 0.5;
+            double az = a.getBlockZ() + 0.5;
+            double bx = b.getBlockX() + 0.5;
+            double bz = b.getBlockZ() + 0.5;
+            edge(player, ax, y1, az, bx, y1, bz, spacing, SELECTION);
+            edge(player, ax, y2, az, bx, y2, bz, spacing, SELECTION);
+            edge(player, ax, y1, az, ax, y2, az, spacing, SELECTION);
+            cube(player, a, i == 0 ? FIRST : i == n - 1 ? SECOND : POINT);
         }
     }
 

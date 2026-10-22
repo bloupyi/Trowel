@@ -11,6 +11,7 @@ import com.stackmc.trowel.engine.Clipboard;
 import com.stackmc.trowel.engine.Engine;
 import com.stackmc.trowel.engine.Generators;
 import com.stackmc.trowel.geom.Noise;
+import com.stackmc.trowel.geom.Polygon;
 import com.stackmc.trowel.geom.Relief;
 import com.stackmc.trowel.pattern.Palettes;
 import com.stackmc.trowel.engine.RegionOps;
@@ -112,6 +113,8 @@ public final class Commands {
     }
 
     private final LibraryCommands library;
+    /** Set by {@link #region}: the polygon the operation the command submits must stay in. */
+    private Mask clip;
 
     public Commands(Trowel trowel) {
         this.library = new LibraryCommands(trowel, this);
@@ -214,6 +217,7 @@ public final class Commands {
                 return;
             }
         }
+        clip = null;
         try {
             action.handler().run(player, args);
         } catch (IllegalArgumentException e) {
@@ -260,13 +264,18 @@ public final class Commands {
         add("pos2", SELECTION, "//pos2", "Second corner at your feet.", (p, a) -> corner(p, feet(p), false), null);
         add("hpos1", SELECTION, "//hpos1", "First corner on the aimed block.", (p, a) -> corner(p, target(p), true), null);
         add("hpos2", SELECTION, "//hpos2", "Second corner on the aimed block.", (p, a) -> corner(p, target(p), false), null);
+        add("poly|polygon", SELECTION, "//poly [add [x y z] | undo | clear]",
+                "Polygon selection: gives its wand, or adds a point (at your feet), removes the last, clears.",
+                this::polygon, args("word:add|undo|clear"));
         add("sel|desel", SELECTION, "//sel", "Clears the selection.", (p, a) -> {
             trowel.session(p).clearSelection();
             Chat.info(p, "Selection cleared.");
         }, null);
         add("size", SELECTION, "//size", "Size of the selection.", (p, a) -> {
             Box box = selection(p);
-            Chat.info(p, "Selection: ", box.size() + " (" + box.volume() + " blocks)");
+            Polygon polygon = trowel.session(p).polygon(p.getWorld());
+            Chat.info(p, polygon == null ? "Selection: " : "Polygon of " + trowel.session(p).getPolygonPoints().size()
+                    + " points: ", box.size() + " (" + volume(p, box) + " blocks)");
             Chat.hint(p, "from " + box.minX() + " " + box.minY() + " " + box.minZ()
                     + " a " + box.maxX() + " " + box.maxY() + " " + box.maxZ());
             trowel.hud().showSelection(p);
@@ -575,6 +584,7 @@ public final class Commands {
 
     private void corner(Player player, Block block, boolean first) {
         Session session = trowel.session(player);
+        session.getPolygonPoints().clear();
         if (first) {
             session.setPos1(block.getLocation());
         } else {
@@ -618,16 +628,19 @@ public final class Commands {
 
     private void count(Player player, String[] args) {
         Box box = region(player);
-        Mask mask = mask(player, args.length == 0 ? "#existing" : join(args, 0));
+        Mask matching = mask(player, args.length == 0 ? "#existing" : join(args, 0));
+        Mask mask = clip == null ? matching : clip.and(matching);
+        long volume = volume(player, box);
         trowel.engine().read(player, player.getWorld(), box, "Count",
                 context -> RegionOps.count(context, box, mask),
-                count -> Chat.info(player, "Matching: ", count + " block(s) out of " + box.volume()));
+                count -> Chat.info(player, "Matching: ", count + " block(s) out of " + volume));
     }
 
     private void distribution(Player player, String[] args) {
         Box box = region(player);
+        Mask within = clip;
         trowel.engine().read(player, player.getWorld(), box, "Distribution",
-                context -> RegionOps.distribution(context, box), counts -> {
+                context -> RegionOps.distribution(context, box, within), counts -> {
                     long total = counts.values().stream().mapToLong(Long::longValue).sum();
                     Chat.info(player, "Distribution over ", total + " blocks:");
                     counts.entrySet().stream().sorted(Map.Entry.<Material, Long>comparingByValue().reversed())
@@ -857,6 +870,7 @@ public final class Commands {
 
     private void copy(Player player, boolean cut) {
         Box box = selection(player);
+        Polygon polygon = trowel.session(player).polygon(player.getWorld());
         if (box.volume() > trowel.settings().maxBlocks(player)) {
             throw new IllegalArgumentException("Selection too large: " + box.volume() + " blocks, the maximum is "
                     + trowel.settings().maxBlocks(player) + ".");
@@ -864,7 +878,8 @@ public final class Commands {
         World world = player.getWorld();
         Block origin = feet(player);
         trowel.engine().read(player, world, box, cut ? "Cut" : "Copy",
-                context -> Clipboard.copy(context, box, world.getUID(), origin.getX(), origin.getY(), origin.getZ()),
+                context -> Clipboard.copy(context, box, polygon, world.getUID(), origin.getX(), origin.getY(),
+                        origin.getZ()),
                 clipboard -> {
                     trowel.session(player).setClipboard(clipboard);
                     String markers = clipboard.markerCount() > 0
@@ -874,7 +889,7 @@ public final class Commands {
                     if (cut) {
                         org.bukkit.block.data.BlockData air = trowel.air();
                         trowel.engine().submit(player, Engine.Job.of("Cut", world, box,
-                                RegionOps.set(box, (x, y, z) -> air)).unprotected());
+                                RegionOps.set(box, (x, y, z) -> air)).unprotected().clip(polygonMask(polygon)));
                     }
                 });
     }
@@ -1064,7 +1079,74 @@ public final class Commands {
     // ------------------------------------------------------------------- tools
 
     void run(Player player, String label, Box reads, Engine.Compute compute) {
-        trowel.engine().submit(player, Engine.Job.of(label, player.getWorld(), reads, compute));
+        trowel.engine().submit(player, Engine.Job.of(label, player.getWorld(), reads, compute).clip(clip));
+    }
+
+    /** The operation writes away from the selection (smear, revolve): the polygon must not cut it. */
+    void unclip() {
+        clip = null;
+    }
+
+    static Mask polygonMask(Polygon polygon) {
+        return polygon == null ? null : (x, y, z, view) -> polygon.contains(x, z);
+    }
+
+    /** Blocks in the selection: those of the polygon when it is one. */
+    long volume(Player player, Box box) {
+        Polygon polygon = trowel.session(player).polygon(player.getWorld());
+        if (polygon == null) {
+            return box.volume();
+        }
+        long count = 0;
+        for (int x = box.minX(); x <= box.maxX(); x++) {
+            for (int z = box.minZ(); z <= box.maxZ(); z++) {
+                if (polygon.contains(x, z)) {
+                    count++;
+                }
+            }
+        }
+        return count * box.height();
+    }
+
+    private void polygon(Player player, String[] args) {
+        Session session = trowel.session(player);
+        World world = player.getWorld();
+        String mode = args.length == 0 ? "wand" : args[0].toLowerCase(Locale.ROOT);
+        switch (mode) {
+            case "wand" -> {
+                give(player, trowel.items().polygonWand());
+                Chat.info(player, "Polygon wand given: right click adds a point, left click removes the last one, "
+                        + "sneak + left click clears. Up to " + Polygon.MAX_POINTS + " points, it closes by itself.");
+                Chat.hint(player, "Then //expand vert, or //expand <n> up, for the height.");
+                return;
+            }
+            case "add" -> {
+                Block block = args.length >= 4
+                        ? world.getBlockAt(integer(args[1], -30_000_000, 30_000_000, "X"),
+                        integer(args[2], world.getMinHeight(), world.getMaxHeight() - 1, "Y"),
+                        integer(args[3], -30_000_000, 30_000_000, "Z"))
+                        : feet(player);
+                int count = session.addPolygonPoint(block.getLocation());
+                Chat.info(player, "Polygon point " + count + "/" + Polygon.MAX_POINTS + ": ",
+                        block.getX() + " " + block.getY() + " " + block.getZ() + describePolygon(player));
+            }
+            case "undo" -> {
+                int count = session.removePolygonPoint(world);
+                Chat.info(player, count == 0 ? "Last polygon point removed: " : "Polygon point removed, ",
+                        count == 0 ? "no selection left." : count + " left" + describePolygon(player));
+            }
+            case "clear" -> {
+                session.clearSelection();
+                Chat.info(player, "Polygon cleared.");
+            }
+            default -> throw new IllegalArgumentException("Usage: //poly [add [x y z] | undo | clear]");
+        }
+        trowel.hud().showSelection(player);
+    }
+
+    private String describePolygon(Player player) {
+        Box box = selection(player);
+        return "  (" + box.size() + ", " + volume(player, box) + " blocks)";
     }
 
     Box selection(Player player) {
@@ -1083,6 +1165,7 @@ public final class Commands {
      */
     Box region(Player player) {
         Box box = selection(player);
+        clip = polygonMask(trowel.session(player).polygon(player.getWorld()));
         long max = (long) trowel.settings().maxBlocks(player) * 40L;
         if (box.volume() > max) {
             throw new IllegalArgumentException("Selection too large for an operation: " + box.volume()

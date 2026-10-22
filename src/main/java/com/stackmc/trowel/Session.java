@@ -3,6 +3,7 @@ package com.stackmc.trowel;
 import com.stackmc.trowel.api.Box;
 import com.stackmc.trowel.engine.Batch;
 import com.stackmc.trowel.engine.Clipboard;
+import com.stackmc.trowel.geom.Polygon;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Location;
@@ -36,6 +37,11 @@ public final class Session {
 
     private Location pos1;
     private Location pos2;
+    /**
+     * Points of a polygonal selection, in the order they were placed. The selection box is their
+     * bounds; the polygon holds while the box keeps them horizontally (see {@link #polygon}).
+     */
+    private final java.util.List<Location> polygonPoints = new java.util.ArrayList<>();
     /** Spline waypoints, in the order they were placed. */
     private final java.util.List<Location> points = new java.util.ArrayList<>();
     /** The frames of a loft: each is a loop of points. */
@@ -85,5 +91,82 @@ public final class Session {
     public void clearSelection() {
         pos1 = null;
         pos2 = null;
+        polygonPoints.clear();
+    }
+
+    /**
+     * {@code true} if the selection is a polygon: its box has the horizontal bounds of the points.
+     * //expand vert keeps the polygon; pushing a side or clicking a corner makes it a box again.
+     */
+    public boolean polygonal(World world) {
+        Box box = selection(world);
+        if (box == null || polygonPoints.isEmpty()) {
+            return false;
+        }
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (Location point : polygonPoints) {
+            if (!world.equals(point.getWorld())) {
+                return false;
+            }
+            minX = Math.min(minX, point.getBlockX());
+            maxX = Math.max(maxX, point.getBlockX());
+            minZ = Math.min(minZ, point.getBlockZ());
+            maxZ = Math.max(maxZ, point.getBlockZ());
+        }
+        return box.minX() == minX && box.maxX() == maxX && box.minZ() == minZ && box.maxZ() == maxZ;
+    }
+
+    /** The polygon of the selection, or {@code null} when it is a plain box. */
+    public Polygon polygon(World world) {
+        if (!polygonal(world)) {
+            return null;
+        }
+        int[] xs = new int[polygonPoints.size()];
+        int[] zs = new int[polygonPoints.size()];
+        for (int i = 0; i < xs.length; i++) {
+            xs[i] = polygonPoints.get(i).getBlockX();
+            zs[i] = polygonPoints.get(i).getBlockZ();
+        }
+        return new Polygon(xs, zs);
+    }
+
+    /** Adds a point to the polygon, starting a new one if the selection was a box. Returns the count. */
+    public int addPolygonPoint(Location point) {
+        World world = point.getWorld();
+        boolean going = polygonal(world);
+        if (!going) {
+            polygonPoints.clear();
+        }
+        if (polygonPoints.size() >= Polygon.MAX_POINTS) {
+            throw new IllegalArgumentException("A polygon has at most " + Polygon.MAX_POINTS
+                    + " points: left click removes the last one.");
+        }
+        polygonPoints.add(point.toBlockLocation());
+        Box added = new Box(point.getBlockX(), point.getBlockY(), point.getBlockZ(),
+                point.getBlockX(), point.getBlockY(), point.getBlockZ());
+        select(world, going ? selection(world).union(added) : added);
+        return polygonPoints.size();
+    }
+
+    /** Removes the last point of the polygon, keeping the height of the selection. Returns the count left. */
+    public int removePolygonPoint(World world) {
+        if (!polygonal(world)) {
+            throw new IllegalArgumentException("No polygon selection: //poly gives its wand.");
+        }
+        Box box = selection(world);
+        polygonPoints.removeLast();
+        if (polygonPoints.isEmpty()) {
+            clearSelection();
+            return 0;
+        }
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (Location point : polygonPoints) {
+            minX = Math.min(minX, point.getBlockX());
+            maxX = Math.max(maxX, point.getBlockX());
+            minZ = Math.min(minZ, point.getBlockZ());
+            maxZ = Math.max(maxZ, point.getBlockZ());
+        }
+        select(world, new Box(minX, box.minY(), minZ, maxX, box.maxY(), maxZ));
+        return polygonPoints.size();
     }
 }

@@ -497,9 +497,14 @@ public final class RegionOps {
         return count[0];
     }
 
-    public static Map<Material, Long> distribution(EditContext context, Box box) {
+    /** Blocks by type, within {@code mask} if not {@code null}. */
+    public static Map<Material, Long> distribution(EditContext context, Box box, Mask mask) {
         Map<Material, Long> counts = new EnumMap<>(Material.class);
-        each(context, box, (x, y, z) -> counts.merge(context.view().type(x, y, z), 1L, Long::sum));
+        each(context, box, (x, y, z) -> {
+            if (mask == null || mask.test(x, y, z, context.view())) {
+                counts.merge(context.view().type(x, y, z), 1L, Long::sum);
+            }
+        });
         return counts;
     }
 }

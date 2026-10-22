@@ -2,9 +2,11 @@ package com.stackmc.trowel;
 
 import com.stackmc.trowel.brush.BrushSettings;
 import com.stackmc.trowel.brush.BrushType;
+import com.stackmc.trowel.geom.Polygon;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -20,7 +22,7 @@ import java.util.List;
  */
 public final class TrowelItems {
 
-    public enum Kind { WAND, BRUSH }
+    public enum Kind { WAND, POLYGON, BRUSH }
 
     private static final NamespacedKey KIND = new NamespacedKey("trowel", "tool");
     private static final NamespacedKey BRUSH = new NamespacedKey("trowel", "brush");
@@ -45,6 +47,22 @@ public final class TrowelItems {
                     plain("Works from afar: aims at the block you look at", NamedTextColor.DARK_GRAY),
                     plain("G: quick actions", NamedTextColor.DARK_GRAY)));
             meta.getPersistentDataContainer().set(KIND, PersistentDataType.STRING, Kind.WAND.name());
+            hide(meta);
+        });
+        return stack;
+    }
+
+    /** The polygon wand: not an axe, so the hand shows which selection is being drawn. */
+    public ItemStack polygonWand() {
+        ItemStack stack = ItemStack.of(Material.BREEZE_ROD);
+        stack.editMeta(meta -> {
+            meta.displayName(plain("Polygon wand", NamedTextColor.GOLD));
+            meta.lore(List.of(
+                    plain("Right click: add a point (" + Polygon.MAX_POINTS + " at most)", NamedTextColor.GRAY),
+                    plain("Left click: remove the last point", NamedTextColor.GRAY),
+                    plain("Sneak + left click: clear", NamedTextColor.GRAY),
+                    plain("Closes by itself; //expand vert for the height", NamedTextColor.DARK_GRAY)));
+            meta.getPersistentDataContainer().set(KIND, PersistentDataType.STRING, Kind.POLYGON.name());
             hide(meta);
         });
         return stack;

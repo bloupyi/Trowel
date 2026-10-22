@@ -61,6 +61,8 @@ public final class ToolListener implements Listener {
 
         if (kind == TrowelItems.Kind.WAND) {
             wand(player, event);
+        } else if (kind == TrowelItems.Kind.POLYGON) {
+            polygon(player, event);
         } else {
             brush(player, event);
         }
@@ -104,13 +106,42 @@ public final class ToolListener implements Listener {
             session.select(player.getWorld(), grown);
             Chat.info(player, "Selection expanded: ", grown.size() + " (" + grown.volume() + " blocks)");
         } else if (left) {
+            session.getPolygonPoints().clear();
             session.setPos1(block.getLocation());
             describe(player, session, "First corner: ", block);
         } else {
+            session.getPolygonPoints().clear();
             session.setPos2(block.getLocation());
             describe(player, session, "Second corner: ", block);
         }
         trowel.hud().showSelection(player);
+    }
+
+    private void polygon(Player player, PlayerInteractEvent event) {
+        Session session = trowel.session(player);
+        int now = Bukkit.getCurrentTick();
+        if (Session.recent(session.getLastWandTick(), now, DEBOUNCE_TICKS)) {
+            return;
+        }
+        session.setLastWandTick(now);
+
+        boolean left = event.getAction() == Action.LEFT_CLICK_BLOCK || event.getAction() == Action.LEFT_CLICK_AIR;
+        if (left && player.isSneaking()) {
+            trowel.commands().execute(player, "poly clear");
+        } else if (left) {
+            trowel.commands().execute(player, "poly undo");
+        } else {
+            Block block = event.getClickedBlock();
+            if (block == null) {
+                RayTraceResult hit = player.rayTraceBlocks(trowel.settings().reach(), FluidCollisionMode.NEVER);
+                block = hit == null ? null : hit.getHitBlock();
+            }
+            if (block == null) {
+                Chat.bar(player, "No block in reach.", NamedTextColor.RED);
+                return;
+            }
+            trowel.commands().execute(player, "poly add " + block.getX() + " " + block.getY() + " " + block.getZ());
+        }
     }
 
     private void describe(Player player, Session session, String label, Block block) {
