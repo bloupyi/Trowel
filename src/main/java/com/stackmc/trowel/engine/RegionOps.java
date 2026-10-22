@@ -368,35 +368,41 @@ public final class RegionOps {
             BlockView view = context.terrain();
             ChangeSet changes = context.changes();
             each(context, box, (x, y, z) -> {
-                BlockData data = view.get(x, y, z);
-                if (!(data instanceof Fence) && !(data instanceof GlassPane) && !(data instanceof Wall)) {
-                    return;
-                }
-                BlockData copy = data.clone();
-                boolean[] links = new boolean[4];
-                for (int i = 0; i < SIDES.length; i++) {
-                    BlockFace face = SIDES[i];
-                    BlockData near = view.get(x + face.getModX(), y, z + face.getModZ());
-                    links[i] = connects(copy, near, face);
-                    if (copy instanceof Fence fence && fence.getAllowedFaces().contains(face)) {
-                        fence.setFace(face, links[i]);
-                    } else if (copy instanceof GlassPane pane && pane.getAllowedFaces().contains(face)) {
-                        pane.setFace(face, links[i]);
-                    } else if (copy instanceof Wall wall) {
-                        wall.setHeight(face, links[i] ? Wall.Height.LOW : Wall.Height.NONE);
-                    }
-                }
-                if (copy instanceof Wall wall) {
-                    boolean straight = (links[0] && links[2] && !links[1] && !links[3])
-                            || (links[1] && links[3] && !links[0] && !links[2]);
-                    wall.setUp(!straight || !view.air(x, y + 1, z));
-                }
-                if (!copy.equals(data)) {
+                BlockData copy = reconnect(view, x, y, z);
+                if (copy != null) {
                     changes.set(x, y, z, copy);
                 }
             });
             return changes;
         };
+    }
+
+    /** The fence, pane or wall at this position connected to what surrounds it, or {@code null} if nothing changes. */
+    static BlockData reconnect(BlockView view, int x, int y, int z) {
+        BlockData data = view.get(x, y, z);
+        if (!(data instanceof Fence) && !(data instanceof GlassPane) && !(data instanceof Wall)) {
+            return null;
+        }
+        BlockData copy = data.clone();
+        boolean[] links = new boolean[4];
+        for (int i = 0; i < SIDES.length; i++) {
+            BlockFace face = SIDES[i];
+            BlockData near = view.get(x + face.getModX(), y, z + face.getModZ());
+            links[i] = connects(copy, near, face);
+            if (copy instanceof Fence fence && fence.getAllowedFaces().contains(face)) {
+                fence.setFace(face, links[i]);
+            } else if (copy instanceof GlassPane pane && pane.getAllowedFaces().contains(face)) {
+                pane.setFace(face, links[i]);
+            } else if (copy instanceof Wall wall) {
+                wall.setHeight(face, links[i] ? Wall.Height.LOW : Wall.Height.NONE);
+            }
+        }
+        if (copy instanceof Wall wall) {
+            boolean straight = (links[0] && links[2] && !links[1] && !links[3])
+                    || (links[1] && links[3] && !links[0] && !links[2]);
+            wall.setUp(!straight || !view.air(x, y + 1, z));
+        }
+        return copy.equals(data) ? null : copy;
     }
 
     private static boolean connects(BlockData self, BlockData near, BlockFace face) {
