@@ -502,6 +502,13 @@ Settings: `radius:3`, `brightness:0.1`, `contrast:0.5`, `dir:0.3,-1,0.2`, `inter
 | `//fill <pattern> <radius> [depth]` | Fills the hole you stand in |
 | `//replacenear`, `//removenear`, `//removeabove`, `//removebelow` | Around you, no selection needed |
 | `//up <height>` | Goes up that many blocks and stands on a glass block (placed only over air), like WorldEdit |
+| `//debugstick` | A debug stick that works without op or creative (see below) |
+
+**The debug stick** (`//debugstick`) changes a block's state like the vanilla one, but Trowel handles it,
+so it only needs `trowel.use`: left click picks the property, right click gives it the next value,
+sneaking goes backwards; the action bar shows the property and its value. It works from afar like the
+wand, stays inside the buildable area, leaves markers alone (unless `//markers edit`) and goes into
+the history: `//undo` takes it back, and the clicks on the same block in a row are undone together.
 
 ---
 
@@ -662,6 +669,7 @@ Textures     //texture <type> <mask> <palette>
 Arceon       //roof  //road  //river  //revolve  //resize  //shadow  //text  //loft
 Brushes      //brushes  //brush <type>
 History      //undo [n|only n|sel|brush]  //redo  //history  //cancel
+Decor        //vines  //moss  //fill  //up  //debugstick
 Moving       //noclip  //flyspeed <1-10|reset>  //walkspeed <1-10|reset>
 Library      //schem save|load|list  //pattern save  //mask save  (@name)  //palette edit
 Help         //help  //spline help  //texture help  //palette list  G key
