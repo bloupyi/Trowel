@@ -633,7 +633,7 @@ public final class Sculpt {
     }
 
     /**
-     * A plain rotation, by {@link Clipboard#turnFreely}: the axis stands for the vertical, the
+     * A plain rotation, by {@link FreeRotation}: the axis stands for the vertical, the
      * plane of the rotation for the ground. Blocks turned out of the selection are dropped.
      */
     private static ChangeSet turn(EditContext context, Box region, int along, double angle) {
@@ -655,9 +655,8 @@ public final class Sculpt {
             }
         }
         context.progress().phase("rotation", 0);
-        Long2ObjectOpenHashMap<BlockData> turned = Clipboard.turnFreely(cells, angle, (size[i] - 1) / 2.0,
-                (size[j] - 1) / 2.0, data -> data.getMaterial().isAir(), data -> data.getMaterial().isSolid(),
-                LongSets.EMPTY_SET);
+        Long2ObjectOpenHashMap<BlockData> turned = FreeRotation.turn(cells, angle, (size[i] - 1) / 2.0,
+                (size[j] - 1) / 2.0, FreeRotation.blocks(context.transforms(), along == 1), LongSets.EMPTY_SET).cells();
         ChangeSet changes = context.changes();
         for (int x = region.minX(); x <= region.maxX(); x++) {
             for (int y = region.minY(); y <= region.maxY(); y++) {
