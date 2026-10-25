@@ -598,6 +598,7 @@ the one in hand. A gradient in a brush: pattern `#gradient[##magma][y]`.
 | `//cancel` | Stops the running operation |
 | `//markers [protect\|edit]` | Protects (default) or not the markers |
 | `//noclip [on\|off]` | Walk and fly through blocks in creative: spectator while a block is in the way, creative again once out |
+| `//flyspeed <1-10\|reset>`, `//walkspeed <1-10\|reset>` | Flying, walking speed: 1 is vanilla, 10 the fastest (decimals work), `reset` goes back to vanilla |
 | `//coedit [show\|share] [on\|off]` | See the selection of other builders in the same world while they hold a Trowel tool (off by default), show yours (on by default) |
 | `//axiom` | State of the Axiom support for you |
 
@@ -661,6 +662,7 @@ Textures     //texture <type> <mask> <palette>
 Arceon       //roof  //road  //river  //revolve  //resize  //shadow  //text  //loft
 Brushes      //brushes  //brush <type>
 History      //undo [n|only n|sel|brush]  //redo  //history  //cancel
+Moving       //noclip  //flyspeed <1-10|reset>  //walkspeed <1-10|reset>
 Library      //schem save|load|list  //pattern save  //mask save  (@name)  //palette edit
 Help         //help  //spline help  //texture help  //palette list  G key
 ```
@@ -746,6 +748,7 @@ trowel.registerHost(this, new TrowelHost() {
 | `selection(Player, World)` | The player's selection, cropped to the buildable area, or `null` |
 | `clearSelection(Player)` | Clears it |
 | `openMenu(Player)`, `openBrushes(Player)` | The G-key home window; the brush picker |
+| `lockSpeeds(Player, boolean)` | `true` puts the player back to vanilla fly and walk speeds and refuses `//flyspeed` and `//walkspeed`; `false` gives back the speeds they chose. Celeste locks them during a game |
 | `reload()` | Reads `config.yml` again |
 
 Trowel items carry the persistent data key `trowel:tool` (and `trowel:brush` for brush settings).

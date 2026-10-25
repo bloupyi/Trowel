@@ -55,6 +55,11 @@ public final class Session {
     private boolean editMarkers;
     /** Walk and fly through blocks in creative. */
     private boolean noclip;
+    /** Chosen with //flyspeed and //walkspeed; {@code null}: vanilla. */
+    private Float flySpeed;
+    private Float walkSpeed;
+    /** Held at the vanilla speeds by a plugin (see {@link com.stackmc.trowel.api.TrowelApi#lockSpeeds}). */
+    private boolean speedsLocked;
 
     private String lastPattern = "stone";
     private String lastMask = "";

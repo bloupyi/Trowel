@@ -585,6 +585,12 @@ public final class Commands {
                     Chat.info(p, session.isNoclip() ? "Noclip on: walk or fly into a block to pass through it."
                             : "Noclip off.");
                 }, args("word:on|off"));
+        add("flyspeed|fs", SETTINGS, "//flyspeed <1-10|reset>",
+                "Flying speed: 1 is vanilla, 10 the fastest, reset goes back to vanilla.",
+                (p, a) -> speed(p, a, true), args("n:reset|2|3|5|10"));
+        add("walkspeed|ws", SETTINGS, "//walkspeed <1-10|reset>",
+                "Walking speed: 1 is vanilla, 10 the fastest, reset goes back to vanilla.",
+                (p, a) -> speed(p, a, false), args("n:reset|2|3|5|10"));
         add("axiom", SETTINGS, "//axiom", "State of the Axiom compatibility for you.", (p, a) -> axiomStatus(p), null);
         add("coedit|coop", SETTINGS, "//coedit [show|share] [on|off]",
                 "Co-editing: see the selection and aimed block of the other builders in the same world (show), show yours (share).",
@@ -614,6 +620,42 @@ public final class Commands {
         new SculptCommands(trowel, this).define();
         new ToolCommands(trowel, this).define();
         library.define();
+    }
+
+    // ------------------------------------------------------------------ speeds
+
+    private void speed(Player player, String[] args, boolean fly) {
+        String raw = need(args, 0, fly ? "//flyspeed <1-10|reset>" : "//walkspeed <1-10|reset>");
+        String name = fly ? "Fly speed: " : "Walk speed: ";
+        Session session = trowel.session(player);
+        if (session.isSpeedsLocked()) {
+            throw new IllegalArgumentException(name + "locked during a game.");
+        }
+        float vanilla = fly ? Trowel.FLY_SPEED : Trowel.WALK_SPEED;
+        Float chosen = raw.equalsIgnoreCase("reset") ? null : speed(raw, vanilla);
+        float value = chosen == null ? vanilla : chosen;
+        if (fly) {
+            session.setFlySpeed(chosen);
+            player.setFlySpeed(value);
+        } else {
+            session.setWalkSpeed(chosen);
+            player.setWalkSpeed(value);
+        }
+        Chat.info(player, name, chosen == null ? "vanilla" : raw.trim());
+    }
+
+    /** Level 1 is the vanilla speed, 10 is Bukkit's maximum of 1. */
+    static float speed(String raw, float vanilla) {
+        double level;
+        try {
+            level = Double.parseDouble(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Speed invalid: " + raw);
+        }
+        if (!(level >= 1 && level <= 10)) {
+            throw new IllegalArgumentException("Speed: between 1 and 10, or reset.");
+        }
+        return (float) Math.min(1, vanilla + (level - 1) / 9 * (1 - vanilla));
     }
 
     // --------------------------------------------------------------- selection
