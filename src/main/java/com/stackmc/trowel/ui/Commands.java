@@ -467,8 +467,10 @@ public final class Commands {
         add("paste", CLIPBOARD, "//paste [-a] [-o] [-s]",
                 "Pastes at your feet. -a without air, -o at the original place, -s selects the paste.",
                 this::paste, args("flag:-a|-o|-s", "flag:-a|-o|-s", "flag:-a|-o|-s"));
-        add("rotate", CLIPBOARD, "//rotate <degrees>", "Rotates the clipboard by any angle, markers included.", (p, a) -> {
-            String raw = need(a, 0, "//rotate <degrees>");
+        add("rotate", CLIPBOARD, "//rotate <degrees> [-r]",
+                "Rotates the clipboard by any angle, markers included. -r raw, without polishing details.", (p, a) -> {
+            boolean polish = !flags(a).contains("r");
+            String raw = need(plain(a), 0, "//rotate <degrees> [-r]");
             double angle;
             try {
                 angle = Double.parseDouble(raw.trim());
@@ -497,7 +499,7 @@ public final class Commands {
                 Clipboard turned = null;
                 Throwable error = null;
                 try {
-                    turned = source.rotated(total, trowel.host().markers(), trowel.transforms());
+                    turned = source.rotated(total, trowel.host().markers(), trowel.transforms(), polish);
                 } catch (Throwable e) {
                     error = e;
                 }
@@ -516,7 +518,7 @@ public final class Commands {
                     Chat.info(p, "Rotated by " + raw.trim() + " degrees. Clipboard: ", done.size());
                 });
             });
-        }, args("word:90|180|270|45"));
+        }, args("word:90|180|270|45", "flag:-r"));
         add("flip", CLIPBOARD, "//flip [direction]", "Flips the clipboard, towards where you look by default.", (p, a) -> {
             int[] d = direction(p, a.length > 0 ? a[0] : null);
             if (Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) > 1) {

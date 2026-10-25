@@ -7,17 +7,23 @@ import com.stackmc.trowel.api.Keys;
 import com.stackmc.trowel.geom.MarkerTransform;
 import com.stackmc.trowel.geom.Polygon;
 import com.stackmc.trowel.geom.Transform;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import org.bukkit.Material;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.BlockData;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
  * A clipboard: blocks around an origin, and the settings of markers.
@@ -191,10 +197,11 @@ public final class Clipboard {
      * The same clipboard, rotated by any angle around the origin, clockwise seen from above.
      *
      * <p>The nearest quarter turn is done first, so block states and marker settings turn with
-     * it; the rest (at most 45 degrees) is done by {@link FreeRotation}. Markers and blocks with
-     * data (chests, signs) are placed once.</p>
+     * it; the rest (at most 45 degrees) is done by {@link FreeRotation}, or by the plain
+     * {@link #turnFreely} without {@code polish}. Markers and blocks with data (chests, signs)
+     * are placed once.</p>
      */
-    public Clipboard rotated(double degrees, MarkerSupport markers, BlockTransforms blocks) {
+    public Clipboard rotated(double degrees, MarkerSupport markers, BlockTransforms blocks, boolean polish) {
         int quarters = (int) Math.round(degrees / 90.0);
         double rest = degrees - quarters * 90.0;
         Transform turn = Transform.rotation(quarters * 90);
@@ -204,15 +211,21 @@ public final class Clipboard {
         }
         LongOpenHashSet fixed = new LongOpenHashSet(base.params.keySet());
         fixed.addAll(base.tiles.keySet());
-        FreeRotation.Result<BlockData> result = FreeRotation.turn(base.cells, rest, 0, 0,
-                FreeRotation.blocks(blocks, true), fixed);
-        Long2ObjectOpenHashMap<BlockData> turned = result.cells();
+        Long2ObjectOpenHashMap<BlockData> turned;
         Long2LongOpenHashMap placed = new Long2LongOpenHashMap();
-        result.sources().forEach((target, source) -> {
-            if (fixed.contains((long) source)) {
-                placed.put((long) source, (long) target);
-            }
-        });
+        if (polish) {
+            FreeRotation.Result<BlockData> result = FreeRotation.turn(base.cells, rest, 0, 0,
+                    FreeRotation.blocks(blocks, true), fixed);
+            turned = result.cells();
+            result.sources().forEach((target, source) -> {
+                if (fixed.contains((long) source)) {
+                    placed.put((long) source, (long) target);
+                }
+            });
+        } else {
+            turned = turnFreely(base.cells, rest, 0, 0, data -> data.getMaterial().isAir(),
+                    data -> data.getMaterial().isSolid(), fixed);
+        }
         Long2ObjectOpenHashMap<Map<String, String>> turnedParams = new Long2ObjectOpenHashMap<>();
         for (Long2ObjectMap.Entry<Map<String, String>> entry : base.params.long2ObjectEntrySet()) {
             BlockData data = base.cells.get(entry.getLongKey());
@@ -244,6 +257,253 @@ public final class Clipboard {
             }
         }
         return new Clipboard(turned, turnedParams, turnedTiles, boundsOf(turned), world, originX, originY, originZ);
+    }
+
+    /** Samples per side of a column when rotating: 5 x 5 points decide what it holds. */
+    private static final int SAMPLES = 5;
+
+    /**
+     * Cells rotated by any angle around the vertical axis through (cx, cz), clockwise seen from above.
+     *
+     * <ol>
+     *   <li>Each target column is sampled 5 x 5 times through the inverse rotation; a place takes the
+     *       block covering at least half of it, the one covering most, so outlines do not fray.</li>
+     *   <li>A block that no place took goes where its center lands: a lone post or torch is never lost.</li>
+     *   <li>Two solid blocks touching only by an edge, close in the original, get the block between
+     *       them: a wall turned by 45 degrees stays a wall, not a row of blocks held by their corners.</li>
+     *   <li>A detail (torch, ladder, flower...) that was held by a solid block and no longer is gets
+     *       removed instead of floating.</li>
+     * </ol>
+     *
+     * @param empty  air: fills a place without being a block
+     * @param solid  blocks that hold details and must stay joined
+     * @param fixed  cells left out: the caller places them once, where their center lands (markers, chests)
+     */
+    static <T> Long2ObjectOpenHashMap<T> turnFreely(Long2ObjectOpenHashMap<T> cells, double degrees, double cx,
+                                                    double cz, Predicate<T> empty, Predicate<T> solid, LongSet fixed) {
+        double a = Math.toRadians(degrees);
+        double cos = Math.cos(a);
+        double sin = Math.sin(a);
+        Box from = boundsOf(cells);
+        double minX = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double minZ = Double.MAX_VALUE;
+        double maxZ = -Double.MAX_VALUE;
+        for (double x : new double[]{from.minX() - 0.5 - cx, from.maxX() + 0.5 - cx}) {
+            for (double z : new double[]{from.minZ() - 0.5 - cz, from.maxZ() + 0.5 - cz}) {
+                double tx = x * cos - z * sin + cx;
+                double tz = x * sin + z * cos + cz;
+                minX = Math.min(minX, tx);
+                maxX = Math.max(maxX, tx);
+                minZ = Math.min(minZ, tz);
+                maxZ = Math.max(maxZ, tz);
+            }
+        }
+
+        T air = null;
+        for (T value : cells.values()) {
+            if (empty.test(value)) {
+                air = value;
+                break;
+            }
+        }
+        Long2ObjectOpenHashMap<T> turned = new Long2ObjectOpenHashMap<>(cells.size());
+        // What each place holds comes from this source cell.
+        Long2LongOpenHashMap origin = new Long2LongOpenHashMap();
+        // A place left without a solid block: the solid block that covered most of it, and how much.
+        Long2ObjectOpenHashMap<T> runnerUp = new Long2ObjectOpenHashMap<>();
+        Long2IntOpenHashMap runnerUpWeight = new Long2IntOpenHashMap();
+        int total = SAMPLES * SAMPLES;
+        int[] columnX = new int[total];
+        int[] columnZ = new int[total];
+        int[] columnWeight = new int[total];
+        List<T> values = new ArrayList<>(total);
+        int[] valueWeight = new int[total];
+        long[] valueSource = new long[total];
+        int[] valueSourceWeight = new int[total];
+
+        for (int x = (int) Math.round(minX); x <= (int) Math.round(maxX); x++) {
+            for (int z = (int) Math.round(minZ); z <= (int) Math.round(maxZ); z++) {
+                int columns = 0;
+                for (int i = -1; i < total; i++) {
+                    // First the center: on a tie, the block under it wins.
+                    double px = i < 0 ? 0 : (i % SAMPLES + 0.5) / SAMPLES - 0.5;
+                    double pz = i < 0 ? 0 : (i / SAMPLES + 0.5) / SAMPLES - 0.5;
+                    double ux = x + px - cx;
+                    double uz = z + pz - cz;
+                    int sx = (int) Math.round(ux * cos + uz * sin + cx);
+                    int sz = (int) Math.round(-ux * sin + uz * cos + cz);
+                    int c = 0;
+                    while (c < columns && (columnX[c] != sx || columnZ[c] != sz)) {
+                        c++;
+                    }
+                    if (c == columns) {
+                        columnX[c] = sx;
+                        columnZ[c] = sz;
+                        columnWeight[c] = 0;
+                        columns++;
+                    }
+                    if (i >= 0) {
+                        columnWeight[c]++;
+                    }
+                }
+                for (int y = from.minY(); y <= from.maxY(); y++) {
+                    values.clear();
+                    int present = 0;
+                    int full = 0;
+                    for (int c = 0; c < columns; c++) {
+                        long source = Keys.pack(columnX[c], y, columnZ[c]);
+                        T value = cells.get(source);
+                        if (value == null || columnWeight[c] == 0 || fixed.contains(source)) {
+                            continue;
+                        }
+                        present += columnWeight[c];
+                        if (!empty.test(value)) {
+                            full += columnWeight[c];
+                        }
+                        int v = values.indexOf(value);
+                        if (v < 0) {
+                            v = values.size();
+                            values.add(value);
+                            valueWeight[v] = 0;
+                            valueSourceWeight[v] = 0;
+                        }
+                        valueWeight[v] += columnWeight[c];
+                        if (columnWeight[c] > valueSourceWeight[v]) {
+                            valueSource[v] = source;
+                            valueSourceWeight[v] = columnWeight[c];
+                        }
+                    }
+                    int best = -1;
+                    int bestEmpty = -1;
+                    for (int v = 0; v < values.size(); v++) {
+                        if (empty.test(values.get(v))) {
+                            if (bestEmpty < 0 || valueWeight[v] > valueWeight[bestEmpty]) {
+                                bestEmpty = v;
+                            }
+                        } else if (best < 0 || valueWeight[v] > valueWeight[best]) {
+                            best = v;
+                        }
+                    }
+                    long target = Keys.pack(x, y, z);
+                    if (2 * full >= total) {
+                        turned.put(target, values.get(best));
+                        origin.put(target, valueSource[best]);
+                        continue;
+                    }
+                    if (2 * present >= total && bestEmpty >= 0) {
+                        turned.put(target, values.get(bestEmpty));
+                    }
+                    if (best >= 0 && solid.test(values.get(best))) {
+                        runnerUp.put(target, values.get(best));
+                        runnerUpWeight.put(target, valueWeight[best]);
+                        origin.put(target, valueSource[best]);
+                    }
+                }
+            }
+        }
+
+        LongOpenHashSet used = new LongOpenHashSet();
+        for (Long2ObjectMap.Entry<T> entry : turned.long2ObjectEntrySet()) {
+            if (!empty.test(entry.getValue())) {
+                used.add(origin.get(entry.getLongKey()));
+            }
+        }
+        for (Long2ObjectMap.Entry<T> entry : cells.long2ObjectEntrySet()) {
+            long source = entry.getLongKey();
+            if (empty.test(entry.getValue()) || fixed.contains(source) || used.contains(source)) {
+                continue;
+            }
+            double ux = Keys.x(source) - cx;
+            double uz = Keys.z(source) - cz;
+            long target = Keys.pack((int) Math.round(ux * cos - uz * sin + cx), Keys.y(source),
+                    (int) Math.round(ux * sin + uz * cos + cz));
+            T there = turned.get(target);
+            if (there == null || empty.test(there)) {
+                turned.put(target, entry.getValue());
+                origin.put(target, source);
+            }
+        }
+
+        for (int pass = 0; pass < 4; pass++) {
+            boolean changed = false;
+            for (long key : turned.keySet().toLongArray()) {
+                T value = turned.get(key);
+                if (!solid.test(value)) {
+                    continue;
+                }
+                int x = Keys.x(key);
+                int y = Keys.y(key);
+                int z = Keys.z(key);
+                for (int dx = -1; dx <= 1; dx += 2) {
+                    long diagonal = Keys.pack(x + dx, y, z + 1);
+                    T other = turned.get(diagonal);
+                    long side = Keys.pack(x + dx, y, z);
+                    long below = Keys.pack(x, y, z + 1);
+                    if (other == null || !solid.test(other) || isSolid(turned, side, solid)
+                            || isSolid(turned, below, solid)) {
+                        continue;
+                    }
+                    long a1 = origin.get(key);
+                    long a2 = origin.get(diagonal);
+                    if (Math.abs(Keys.x(a1) - Keys.x(a2)) + Math.abs(Keys.z(a1) - Keys.z(a2)) > 2) {
+                        continue;
+                    }
+                    long fill = runnerUpWeight.get(side) >= runnerUpWeight.get(below) ? side : below;
+                    T filler = runnerUp.get(fill);
+                    turned.put(fill, filler != null ? filler : value);
+                    origin.put(fill, filler != null ? origin.get(fill) : a1);
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                break;
+            }
+        }
+
+        LongOpenHashSet heldBefore = held(cells, empty, solid);
+        LongOpenHashSet heldNow = held(turned, empty, solid);
+        for (long key : turned.keySet().toLongArray()) {
+            T value = turned.get(key);
+            if (empty.test(value) || solid.test(value) || heldNow.contains(key) || !origin.containsKey(key)
+                    || !heldBefore.contains(origin.get(key))) {
+                continue;
+            }
+            if (air != null) {
+                turned.put(key, air);
+            } else {
+                turned.remove(key);
+            }
+        }
+        return turned;
+    }
+
+    private static <T> boolean isSolid(Long2ObjectOpenHashMap<T> cells, long key, Predicate<T> solid) {
+        T value = cells.get(key);
+        return value != null && solid.test(value);
+    }
+
+    /** Details (neither air nor solid) held by a solid block, directly or through other details. */
+    private static <T> LongOpenHashSet held(Long2ObjectOpenHashMap<T> cells, Predicate<T> empty, Predicate<T> solid) {
+        LongOpenHashSet held = new LongOpenHashSet();
+        LongArrayList pending = new LongArrayList();
+        for (Long2ObjectMap.Entry<T> entry : cells.long2ObjectEntrySet()) {
+            if (solid.test(entry.getValue())) {
+                pending.add(entry.getLongKey());
+            }
+        }
+        int[][] around = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        while (!pending.isEmpty()) {
+            long key = pending.removeLong(pending.size() - 1);
+            for (int[] d : around) {
+                long next = Keys.offset(key, d[0], d[1], d[2]);
+                T value = cells.get(next);
+                if (value != null && !empty.test(value) && !solid.test(value) && held.add(next)) {
+                    pending.add(next);
+                }
+            }
+        }
+        return held;
     }
 
     /** Where a marker or a block with data went; where its center lands if it found no room. */
