@@ -210,6 +210,7 @@ public final class Dialogs implements Listener {
                 .text("mask", "Mask to count", "#existing");
         screen.stay("Wand", "//wand", in -> "wand")
                 .stay("Polygon wand", "//poly: right click adds a point, left click removes the last", in -> "poly")
+                .stay("Debug stick", "//debugstick: changes block states, without op", in -> "debugstick")
                 .stay("Polygon point: my feet", "//poly add", in -> "poly add")
                 .stay("Polygon: remove last point", "//poly undo", in -> "poly undo")
                 .stay("Corner 1: my feet", "//pos1", in -> "pos1")

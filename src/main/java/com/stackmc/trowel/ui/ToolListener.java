@@ -5,13 +5,17 @@ import com.stackmc.trowel.Session;
 import com.stackmc.trowel.Trowel;
 import com.stackmc.trowel.TrowelItems;
 import com.stackmc.trowel.api.Box;
+import com.stackmc.trowel.engine.ChangeSet;
+import com.stackmc.trowel.engine.Engine;
 import com.stackmc.trowel.brush.BrushSettings;
 import com.stackmc.trowel.brush.BrushType;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -22,6 +26,15 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.util.RayTraceResult;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The wand and brushes in hand.
@@ -63,6 +76,8 @@ public final class ToolListener implements Listener {
             wand(player, event);
         } else if (kind == TrowelItems.Kind.POLYGON) {
             polygon(player, event);
+        } else if (kind == TrowelItems.Kind.DEBUG) {
+            debug(player, event);
         } else {
             brush(player, event);
         }
@@ -148,6 +163,107 @@ public final class ToolListener implements Listener {
         Box box = session.selection(player.getWorld());
         String where = block.getX() + " " + block.getY() + " " + block.getZ();
         Chat.info(player, label, box == null ? where : where + "  (" + box.size() + ", " + box.volume() + " blocks)");
+    }
+
+    // ------------------------------------------------------------- debug stick
+
+    /** Each block type's properties and their values, in the vanilla order. */
+    private static final Map<Material, Map<String, List<String>>> PROPERTIES = new HashMap<>();
+
+    /**
+     * The vanilla debug stick needs op and creative: Trowel does it itself, inside the buildable
+     * area and through the history. Left click picks the property, right click changes its value,
+     * sneaking goes backwards.
+     */
+    private void debug(Player player, PlayerInteractEvent event) {
+        Session session = trowel.session(player);
+        int now = Bukkit.getCurrentTick();
+        if (Session.recent(session.getLastWandTick(), now, DEBOUNCE_TICKS)) {
+            return;
+        }
+        session.setLastWandTick(now);
+
+        Block block = event.getClickedBlock();
+        if (block == null) {
+            RayTraceResult hit = player.rayTraceBlocks(trowel.settings().reach(), FluidCollisionMode.NEVER);
+            block = hit == null ? null : hit.getHitBlock();
+        }
+        if (block == null) {
+            Chat.bar(player, "No block in reach.", NamedTextColor.RED);
+            return;
+        }
+        Material type = block.getType();
+        Map<String, List<String>> properties = PROPERTIES.computeIfAbsent(type, material -> properties(
+                material.asBlockType().createBlockDataStates().stream().map(data -> data.getAsString(false)).toList()));
+        if (properties.isEmpty()) {
+            Chat.bar(player, type.getKey().getKey() + " has no properties", NamedTextColor.RED);
+            return;
+        }
+
+        Map<String, String> values = values(block.getBlockData().getAsString(false));
+        List<String> names = new ArrayList<>(properties.keySet());
+        String selected = session.getDebugProperties().get(type);
+        if (!names.contains(selected)) {
+            selected = names.getFirst();
+        }
+        boolean left = event.getAction() == Action.LEFT_CLICK_BLOCK || event.getAction() == Action.LEFT_CLICK_AIR;
+        if (left) {
+            String next = cycle(names, selected, player.isSneaking());
+            session.getDebugProperties().put(type, next);
+            Chat.bar(player, "Selected \"" + next + "\" (" + values.get(next) + ")", NamedTextColor.AQUA);
+            return;
+        }
+
+        String property = selected;
+        String value = cycle(properties.get(property), values.get(property), player.isSneaking());
+        values.put(property, value);
+        BlockData changed = type.createBlockData(state(values));
+        int x = block.getX();
+        int y = block.getY();
+        int z = block.getZ();
+        trowel.engine().submit(player, Engine.Job.of("Debug stick", block.getWorld(), new Box(x, y, z, x, y, z),
+                        context -> {
+                            ChangeSet changes = context.changes();
+                            changes.set(x, y, z, changed);
+                            return changes;
+                        })
+                .stroke("debug:" + x + ":" + y + ":" + z)
+                .then(count -> Chat.bar(player, count == 0 ? "Not changed: outside the buildable area or protected."
+                        : "\"" + property + "\" to " + value, count == 0 ? NamedTextColor.RED : NamedTextColor.AQUA)));
+    }
+
+    /** Properties and their values in the order the states list them: {@code minecraft:x[a=1,b=2]}. */
+    static Map<String, List<String>> properties(Collection<String> states) {
+        Map<String, Set<String>> seen = new LinkedHashMap<>();
+        for (String state : states) {
+            values(state).forEach((name, value) -> seen.computeIfAbsent(name, key -> new LinkedHashSet<>()).add(value));
+        }
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        seen.forEach((name, all) -> out.put(name, List.copyOf(all)));
+        return out;
+    }
+
+    static Map<String, String> values(String state) {
+        Map<String, String> out = new LinkedHashMap<>();
+        int open = state.indexOf('[');
+        if (open < 0) {
+            return out;
+        }
+        for (String pair : state.substring(open + 1, state.length() - 1).split(",")) {
+            int equals = pair.indexOf('=');
+            out.put(pair.substring(0, equals), pair.substring(equals + 1));
+        }
+        return out;
+    }
+
+    static String state(Map<String, String> values) {
+        List<String> pairs = new ArrayList<>();
+        values.forEach((name, value) -> pairs.add(name + "=" + value));
+        return "[" + String.join(",", pairs) + "]";
+    }
+
+    static String cycle(List<String> options, String current, boolean backwards) {
+        return options.get(Math.floorMod(options.indexOf(current) + (backwards ? -1 : 1), options.size()));
     }
 
     // ------------------------------------------------------------------ brush

@@ -450,6 +450,11 @@ public final class Commands {
                 (p, a) -> column(p, a, true), args("n:2", "n:16"));
         add("removebelow", NEAR, "//removebelow [radius] [depth]", "Clears below your feet.",
                 (p, a) -> column(p, a, false), args("n:2", "n:16"));
+        add("debugstick|debug", NEAR, "//debugstick", "Gives a debug stick that works without op.", (p, a) -> {
+            give(p, trowel.items().debugStick());
+            Chat.info(p, "Debug stick given: left click picks the property, right click changes its value "
+                    + "(sneaking: backwards).");
+        }, null);
         add("up", NEAR, "//up <height>", "Goes up and stands on a glass block, like WorldEdit.",
                 (p, a) -> up(p, integer(need(a, 0, "//up <height>"), 1, 4096, "Height")), args("n:5"));
         add("fill", NEAR, "//fill <pattern> <radius> [depth]",

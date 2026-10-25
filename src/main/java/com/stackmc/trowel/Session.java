@@ -61,6 +61,9 @@ public final class Session {
     /** Held at the vanilla speeds by a plugin (see {@link com.stackmc.trowel.api.TrowelApi#lockSpeeds}). */
     private boolean speedsLocked;
 
+    /** The property the debug stick changes, by block type. */
+    private final java.util.Map<org.bukkit.Material, String> debugProperties = new java.util.HashMap<>();
+
     private String lastPattern = "stone";
     private String lastMask = "";
     private int lastBrushTick = Integer.MIN_VALUE;

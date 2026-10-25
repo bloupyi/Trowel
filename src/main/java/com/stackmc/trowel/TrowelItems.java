@@ -22,7 +22,7 @@ import java.util.List;
  */
 public final class TrowelItems {
 
-    public enum Kind { WAND, POLYGON, BRUSH }
+    public enum Kind { WAND, POLYGON, BRUSH, DEBUG }
 
     private static final NamespacedKey KIND = new NamespacedKey("trowel", "tool");
     private static final NamespacedKey BRUSH = new NamespacedKey("trowel", "brush");
@@ -63,6 +63,22 @@ public final class TrowelItems {
                     plain("Sneak + left click: clear", NamedTextColor.GRAY),
                     plain("Closes by itself; //expand vert for the height", NamedTextColor.DARK_GRAY)));
             meta.getPersistentDataContainer().set(KIND, PersistentDataType.STRING, Kind.POLYGON.name());
+            hide(meta);
+        });
+        return stack;
+    }
+
+    /** The debug stick, handled by Trowel: it works without op and goes through the host and the history. */
+    public ItemStack debugStick() {
+        ItemStack stack = ItemStack.of(Material.DEBUG_STICK);
+        stack.editMeta(meta -> {
+            meta.displayName(plain("Debug stick", NamedTextColor.GOLD));
+            meta.lore(List.of(
+                    plain("Left click: next property", NamedTextColor.GRAY),
+                    plain("Right click: next value", NamedTextColor.GRAY),
+                    plain("Sneaking: backwards", NamedTextColor.GRAY),
+                    plain("Works from afar; //undo goes back", NamedTextColor.DARK_GRAY)));
+            meta.getPersistentDataContainer().set(KIND, PersistentDataType.STRING, Kind.DEBUG.name());
             hide(meta);
         });
         return stack;
