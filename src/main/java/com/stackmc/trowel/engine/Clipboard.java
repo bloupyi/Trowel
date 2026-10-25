@@ -197,10 +197,11 @@ public final class Clipboard {
      * The same clipboard, rotated by any angle around the origin, clockwise seen from above.
      *
      * <p>The nearest quarter turn is done first, so block states and marker settings turn with
-     * it; the rest (at most 45 degrees) moves blocks only, see {@link #turnFreely}. Markers and
-     * blocks with data (chests, signs) are placed once, where their center lands.</p>
+     * it; the rest (at most 45 degrees) is done by {@link FreeRotation}, or by the plain
+     * {@link #turnFreely} without {@code polish}. Markers and blocks with data (chests, signs)
+     * are placed once.</p>
      */
-    public Clipboard rotated(double degrees, MarkerSupport markers, BlockTransforms blocks) {
+    public Clipboard rotated(double degrees, MarkerSupport markers, BlockTransforms blocks, boolean polish) {
         int quarters = (int) Math.round(degrees / 90.0);
         double rest = degrees - quarters * 90.0;
         Transform turn = Transform.rotation(quarters * 90);
@@ -210,16 +211,28 @@ public final class Clipboard {
         }
         LongOpenHashSet fixed = new LongOpenHashSet(base.params.keySet());
         fixed.addAll(base.tiles.keySet());
-        Long2ObjectOpenHashMap<BlockData> turned = turnFreely(base.cells, rest, 0, 0,
-                data -> data.getMaterial().isAir(), data -> data.getMaterial().isSolid(), fixed);
+        Long2ObjectOpenHashMap<BlockData> turned;
+        Long2LongOpenHashMap placed = new Long2LongOpenHashMap();
+        if (polish) {
+            FreeRotation.Result<BlockData> result = FreeRotation.turn(base.cells, rest, 0, 0,
+                    FreeRotation.blocks(blocks, true), fixed);
+            turned = result.cells();
+            result.sources().forEach((target, source) -> {
+                if (fixed.contains((long) source)) {
+                    placed.put((long) source, (long) target);
+                }
+            });
+        } else {
+            turned = turnFreely(base.cells, rest, 0, 0, data -> data.getMaterial().isAir(),
+                    data -> data.getMaterial().isSolid(), fixed);
+        }
         Long2ObjectOpenHashMap<Map<String, String>> turnedParams = new Long2ObjectOpenHashMap<>();
         for (Long2ObjectMap.Entry<Map<String, String>> entry : base.params.long2ObjectEntrySet()) {
             BlockData data = base.cells.get(entry.getLongKey());
             if (data == null) {
                 continue;
             }
-            long target = turnPoint(entry.getLongKey(), rest);
-            turned.put(target, data);
+            long target = place(turned, placed, entry.getLongKey(), data, rest);
             turnedParams.put(target, entry.getValue());
         }
         Long2ObjectOpenHashMap<BlockState> turnedTiles = new Long2ObjectOpenHashMap<>();
@@ -228,8 +241,7 @@ public final class Clipboard {
             if (data == null) {
                 continue;
             }
-            long target = turnPoint(entry.getLongKey(), rest);
-            turned.put(target, data);
+            long target = place(turned, placed, entry.getLongKey(), data, rest);
             turnedTiles.put(target, entry.getValue());
         }
         // Fences, panes and walls kept the links of their old neighbours: connect them to the new ones.
@@ -492,6 +504,17 @@ public final class Clipboard {
             }
         }
         return held;
+    }
+
+    /** Where a marker or a block with data went; where its center lands if it found no room. */
+    private static long place(Long2ObjectOpenHashMap<BlockData> turned, Long2LongOpenHashMap placed, long source,
+                              BlockData data, double degrees) {
+        if (placed.containsKey(source)) {
+            return placed.get(source);
+        }
+        long target = turnPoint(source, degrees);
+        turned.put(target, data);
+        return target;
     }
 
     /** A relative position rotated by any angle around the vertical axis, rounded to a block. */

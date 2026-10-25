@@ -130,9 +130,9 @@ final class SculptCommands {
                         : Commands.filter(List.of("1", "2", "4", "-h", "-v"), a[a.length - 1]));
         c.add("twist", DEFORM, "//twist <degrees> [x|y|z]", "Twists the selection around its axis, from 0 to the given angle.",
                 (p, a) -> rotate(p, a, true, false), c.args("n:45|90|180|360", "word:y|x|z"));
-        c.add("rotatesel|rotateregion", DEFORM, "//rotatesel <degrees> [x|y|z]",
-                "Rotates the content of the selection by any angle around its center.",
-                (p, a) -> rotate(p, a, false, false), c.args("n:15|30|45", "word:y|x|z"));
+        c.add("rotatesel|rotateregion", DEFORM, "//rotatesel <degrees> [x|y|z] [-r]",
+                "Rotates the content of the selection by any angle around its center. -r raw, without polishing details.",
+                (p, a) -> rotate(p, a, false, false), c.args("n:15|30|45", "word:y|x|z", "flag:-r"));
         c.add("taper", DEFORM, "//taper <factor> [x|y|z]",
                 "Tapers (below 1) or flares (above 1) the selection along an axis.",
                 (p, a) -> rotate(p, a, false, true), c.args("n:0.3|0.5|1.5", "word:y|x|z"));
@@ -238,8 +238,10 @@ final class SculptCommands {
                 Sculpt.surface(box, kind, radius, size, octaves, noise, mode));
     }
 
-    private void rotate(Player player, String[] args, boolean twist, boolean taper) {
-        String usage = twist ? "//twist <degrees> [axis]" : taper ? "//taper <factor> [axis]" : "//rotatesel <degrees> [axis]";
+    private void rotate(Player player, String[] all, boolean twist, boolean taper) {
+        boolean polish = !Commands.flags(all).contains("r");
+        String[] args = Commands.plain(all);
+        String usage = twist ? "//twist <degrees> [axis]" : taper ? "//taper <factor> [axis]" : "//rotatesel <degrees> [axis] [-r]";
         Box box = c.region(player);
         double value = number(Commands.need(args, 0, usage), taper ? "Factor" : "Angle");
         char axis = args.length > 1 ? Character.toLowerCase(args[1].charAt(0)) : 'y';
@@ -250,7 +252,7 @@ final class SculptCommands {
             value = clamp(value, 0.05, 4);
         }
         String label = twist ? "Twist" : taper ? "Taper" : "Rotation";
-        c.run(player, label, box, Sculpt.rotate(box, axis, taper ? 0 : value, twist, taper ? value : 1));
+        c.run(player, label, box, Sculpt.rotate(box, axis, taper ? 0 : value, twist, taper ? value : 1, polish));
     }
 
     // ---------------------------------------------------------------- textures
