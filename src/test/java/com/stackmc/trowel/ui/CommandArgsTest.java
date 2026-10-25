@@ -30,6 +30,20 @@ class CommandArgsTest {
     }
 
     @Test
+    @DisplayName("Speed levels go from vanilla at 1 to Bukkit's maximum at 10")
+    void speeds() {
+        assertEquals(0.1f, Commands.speed("1", 0.1f), 1e-6);
+        assertEquals(0.2f, Commands.speed("1", 0.2f), 1e-6);
+        assertEquals(1f, Commands.speed("10", 0.1f));
+        assertEquals(1f, Commands.speed("10", 0.2f));
+        assertEquals(0.55f, Commands.speed("5.5", 0.1f), 1e-6);
+        assertThrows(IllegalArgumentException.class, () -> Commands.speed("0", 0.1f));
+        assertThrows(IllegalArgumentException.class, () -> Commands.speed("11", 0.1f));
+        assertThrows(IllegalArgumentException.class, () -> Commands.speed("NaN", 0.1f));
+        assertThrows(IllegalArgumentException.class, () -> Commands.speed("fast", 0.1f));
+    }
+
+    @Test
     @DisplayName("A missing argument gives the usage")
     void need() {
         assertEquals("stone", Commands.need(new String[]{"stone"}, 0, "//set <pattern>"));

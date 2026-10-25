@@ -59,6 +59,8 @@ import java.util.UUID;
 public final class Trowel implements TrowelApi {
 
     private static final long KEEP_MILLIS = 15 * 60 * 1000L;
+    public static final float FLY_SPEED = 0.1f;
+    public static final float WALK_SPEED = 0.2f;
 
     private final JavaPlugin plugin;
     private final HostRegistry hosts = new HostRegistry();
@@ -262,6 +264,27 @@ public final class Trowel implements TrowelApi {
     @Override
     public void openBrushes(Player player) {
         dialogs.openKit(player, false);
+    }
+
+    @Override
+    public void lockSpeeds(Player player, boolean locked) {
+        if (locked) {
+            session(player).setSpeedsLocked(true);
+            player.setFlySpeed(FLY_SPEED);
+            player.setWalkSpeed(WALK_SPEED);
+            return;
+        }
+        Session session = existingSession(player);
+        if (session == null || !session.isSpeedsLocked()) {
+            return;
+        }
+        session.setSpeedsLocked(false);
+        if (session.getFlySpeed() != null) {
+            player.setFlySpeed(session.getFlySpeed());
+        }
+        if (session.getWalkSpeed() != null) {
+            player.setWalkSpeed(session.getWalkSpeed());
+        }
     }
 
     /** One brush stroke on this block. */

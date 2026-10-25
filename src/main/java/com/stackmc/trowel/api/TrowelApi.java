@@ -47,6 +47,13 @@ public interface TrowelApi {
     /** The brush picker. */
     void openBrushes(Player player);
 
+    /**
+     * {@code true} puts the player back to the vanilla fly and walk speeds and refuses //flyspeed
+     * and //walkspeed; {@code false} gives back the speeds they had chosen. Celeste locks them for
+     * the length of a game.
+     */
+    void lockSpeeds(Player player, boolean locked);
+
     /** Reads the configuration again. */
     void reload();
 }
