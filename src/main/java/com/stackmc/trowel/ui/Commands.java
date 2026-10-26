@@ -72,7 +72,8 @@ public final class Commands {
     public static final String NOISE_HELP = "Noises: fractal, smooth, ridged, billow, warp, terrace, marble, strata, cells, "
             + "distance, cracks, rings, waves, columns, drips, spiral, checker, hexagons, dither, white, turbulence, electric. "
             + "Tuned: perlin(f:0.1,ft:ridged,fo:4), cellular(cr:edge,cj:0.8), gabor(go:45), value(st:5)... "
-            + "Reliefs: hills, mountains, plains, dunes, mesa, islands, craters, canyons, volcanoes, valleys, warped. "
+            + "Reliefs: hills, mountains, plains, dunes, mesa, islands, craters, canyons, volcanoes, valleys, warped "
+            + "(//terrain also takes any noise: simplex, manhattan, fractal...). "
             + "Expressions: //functions.";
 
     private static final String SELECTION = "Selection";
@@ -412,8 +413,9 @@ public final class Commands {
         add("carve", NOISE, "//carve <noise> <scale> [threshold %]",
                 "Carves the selection where the noise exceeds the threshold: caves, holes, sponge.",
                 this::carve, args("noisespec", "n:4|8|16|32", "n:50|60|70"));
-        add("terrain|terragen", NOISE, "//terrain <relief> [scale] [strength %] [top|under|deep]",
-                "Generates relief in the selection, like Arceon's Terragen.",
+        add("terrain|terragen", NOISE, "//terrain <relief|noise> [scale] [strength %] [top|under|deep]",
+                "Generates relief in the selection, like Arceon's Terragen. The relief can also be any noise: "
+                        + "simplex, manhattan, fractal, ridged, cellular(cd:cheb), simplex(fo:6,s:42)...",
                 this::terrain, args("relief", "n:16|32|64|128", "n:50|75|100", "layers"));
         add("roughen", NOISE, "//roughen <noise> [scale] [amplitude]", "Makes the relief of the selection less smooth.",
                 this::roughen, args("noisespec", "n:4|6|10", "n:1|2|4"));
@@ -845,20 +847,26 @@ public final class Commands {
     }
 
     private void terrain(Player player, String[] args) {
-        String usage = "//terrain <relief> [scale] [strength %] [top|under|deep]";
+        String usage = "//terrain <relief|noise> [scale] [strength %] [top|under|deep]";
         Box box = region(player);
         Relief relief = Relief.parse(need(args, 0, usage));
-        if (relief == null) {
-            throw new IllegalArgumentException("Reliefs: " + Arrays.stream(Relief.values()).map(Relief::id)
-                    .collect(Collectors.joining(", ")));
-        }
         double scale = args.length > 1 ? integer(args[1], 2, 512, "Scale") : 32;
+        com.stackmc.trowel.geom.NoiseSpec noise = null;
+        if (relief == null) {
+            try {
+                noise = com.stackmc.trowel.geom.NoiseSpec.parse(args[0], 1 / scale);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(e.getMessage() + " Reliefs: " + Arrays.stream(Relief.values())
+                        .map(Relief::id).collect(Collectors.joining(", ")));
+            }
+        }
         int strength = args.length > 2 ? integer(args[2], 1, 100, "Strength") : 100;
         String[] layers = (args.length > 3 ? args[3] : "grass_block|dirt|stone").split("\\|");
         Pattern top = pattern(player, layers[0]);
         Pattern under = pattern(player, layers.length > 1 ? layers[1] : "dirt");
         Pattern deep = pattern(player, layers.length > 2 ? layers[2] : "stone");
-        run(player, "Relief " + relief.label(), box, Generators.terrain(box, relief, scale, strength, top, under, deep));
+        run(player, "Relief " + (relief != null ? relief.label() : noise.text()), box,
+                Generators.terrain(box, relief, noise, scale, strength, top, under, deep));
     }
 
     private void roughen(Player player, String[] args) {
@@ -1442,7 +1450,9 @@ public final class Commands {
                 return completeNoiseSpec(last);
             }
             if (kind.equals("relief")) {
-                return filter(Arrays.stream(Relief.values()).map(Relief::id).toList(), last);
+                List<String> out = new ArrayList<>(filter(Arrays.stream(Relief.values()).map(Relief::id).toList(), last));
+                out.addAll(completeNoiseSpec(last));
+                return out;
             }
             if (kind.startsWith("n:")) {
                 return filter(List.of(kind.substring(2).split("\\|")), last);

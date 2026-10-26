@@ -431,7 +431,7 @@ With a palette, the value (0 to 1) picks the block:
 
 | Command | Effect |
 |---------|--------|
-| `//terrain <relief> [scale] [strength %] [layers]` | The selection becomes terrain: hills, mountains, plains, dunes, mesa, islands, craters, canyons, volcanoes, valleys, warped. Layers: top, under, deep, for example `grass_block\|dirt\|stone` |
+| `//terrain <relief\|noise> [scale] [strength %] [layers]` | The selection becomes terrain: hills, mountains, plains, dunes, mesa, islands, craters, canyons, volcanoes, valleys, warped, or any noise used as a heightmap: `simplex`, `manhattan`, `chebyshev`, `euclidean`, `fractal`, `ridged`, `billow`, `cellular(cd:man,cr:edge)`, `simplex(ft:ridged,fo:6,s:42)`... Layers: top, under, deep, for example `grass_block\|dirt\|stone`. Alias: `//terragen` |
 | `//heightmap <palette> <noise> [scale] [height %]` | A relief drawn from a noise, painted bottom to top |
 | `//noise <pattern\|palette> <noise> <scale> [threshold %] [-a]` | Rocks, islands, clouds where the noise exceeds the threshold |
 | `//carve <noise> <scale> [threshold %]` | Carves: caves, holes |
