@@ -86,17 +86,31 @@ public final class MarkerTransform {
                 return raw;
             }
             try {
-                int[] turned = t.apply(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()),
-                        Integer.parseInt(parts[2].trim()));
+                // A zone shift may hold decimals: turn it through the images of the unit axes.
+                double x = Double.parseDouble(parts[0].trim());
+                double y = Double.parseDouble(parts[1].trim());
+                double z = Double.parseDouble(parts[2].trim());
+                int[] ex = t.apply(1, 0, 0);
+                int[] ey = t.apply(0, 1, 0);
+                int[] ez = t.apply(0, 0, 1);
                 if (!out.isEmpty()) {
                     out.append(';');
                 }
-                out.append(turned[0]).append(',').append(turned[1]).append(',').append(turned[2]);
+                for (int i = 0; i < 3; i++) {
+                    if (i > 0) {
+                        out.append(',');
+                    }
+                    out.append(number(ex[i] * x + ey[i] * y + ez[i] * z + 0.0));
+                }
             } catch (NumberFormatException e) {
                 return raw;
             }
         }
         return out.toString();
+    }
+
+    private static String number(double value) {
+        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 
     /** Signed sizes, once rotated, of a zone of signed sizes w, h, d anchored at (x, y, z). */

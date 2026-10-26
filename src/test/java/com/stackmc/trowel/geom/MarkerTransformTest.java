@@ -43,6 +43,8 @@ class MarkerTransformTest {
         assertEquals("0,6,0;0,0,4",
                 MarkerTransform.params(Map.of("path", "0,6,0;4,0,0"), KINDS, Transform.ROTATE_90).get("path"));
         assertEquals("abc", MarkerTransform.path("abc", Transform.ROTATE_90));
+        assertEquals("0,1,0.5", MarkerTransform.path("0.5,1,0", Transform.ROTATE_90));
+        assertEquals("-0.5,0,0", MarkerTransform.path("0.5,0,0", Transform.FLIP_X));
     }
 
     @Test
