@@ -89,9 +89,10 @@ public final class Generators {
      * <p>The selection becomes terrain: below the surface, {@code under} for three layers then
      * {@code deep}; above, air. The height goes from the bottom to the top of the selection.</p>
      *
+     * @param relief   a ready-made relief, or {@code null} to take the height from {@code noise}
      * @param strength share of the selection height the relief occupies, in percent
      */
-    public static Engine.Compute terrain(Box box, Relief relief, double scale, int strength,
+    public static Engine.Compute terrain(Box box, Relief relief, NoiseSpec noise, double scale, int strength,
                                          Pattern top, Pattern under, Pattern deep) {
         return context -> {
             ChangeSet changes = context.changes();
@@ -103,8 +104,8 @@ public final class Generators {
             for (int x = box.minX(); x <= box.maxX(); x++) {
                 context.progress().tick(1);
                 for (int z = box.minZ(); z <= box.maxZ(); z++) {
-                    double h = relief.height(x, z, scale, (x - centreX) / halfW, (z - centreZ) / halfD)
-                            * strength / 100.0;
+                    double h = (relief == null ? noise.sample(x, 0, z)
+                            : relief.height(x, z, scale, (x - centreX) / halfW, (z - centreZ) / halfD)) * strength / 100.0;
                     int surface = box.minY() + (int) Math.round(h * (box.height() - 1));
                     boolean hole = relief == Relief.ISLANDS && h < 0.02;
                     for (int y = box.minY(); y <= box.maxY(); y++) {

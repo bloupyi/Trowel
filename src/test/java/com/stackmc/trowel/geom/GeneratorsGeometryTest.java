@@ -62,6 +62,25 @@ class GeneratorsGeometryTest {
     }
 
     @Test
+    @DisplayName("The math noises of //terragen give a height within [0, 1] that varies")
+    void terragenNoises() {
+        for (String raw : List.of("simplex", "manhattan", "chebyshev", "euclidean", "fractal", "simplex(ft:ridged,fo:6,s:42)")) {
+            NoiseSpec spec = NoiseSpec.parse(raw, 1 / 16.0);
+            double min = 1;
+            double max = 0;
+            for (int x = -40; x <= 40; x++) {
+                for (int z = -40; z <= 40; z++) {
+                    double h = spec.sample(x, 0, z);
+                    assertTrue(h >= 0 && h < 1, raw + ": " + h);
+                    min = Math.min(min, h);
+                    max = Math.max(max, h);
+                }
+            }
+            assertTrue(max - min > 0.3, raw + ": from " + min + " to " + max);
+        }
+    }
+
+    @Test
     @DisplayName("A spline goes through each of its points")
     void splineThroughPoints() {
         List<double[]> points = List.of(new double[]{0, 0, 0}, new double[]{10, 5, 0}, new double[]{20, 0, 10});

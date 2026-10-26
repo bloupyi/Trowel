@@ -154,7 +154,8 @@ public final class NoiseSpec {
 
     /** Known types, for completion. */
     public static List<String> types() {
-        List<String> out = new java.util.ArrayList<>(List.of("perlin", "value", "valuecubic", "white", "cellular", "gabor"));
+        List<String> out = new java.util.ArrayList<>(List.of("perlin", "simplex", "value", "valuecubic", "white", "cellular", "gabor",
+                "manhattan", "chebyshev", "euclidean"));
         for (Noise.Kind kind : Noise.Kind.values()) {
             if (!out.contains(kind.id())) {
                 out.add(kind.id());
@@ -245,6 +246,13 @@ public final class NoiseSpec {
                 spec.fractal = Fractal.NONE;
                 spec.returns = CellReturn.EDGE;
                 spec.distance = CellDistance.MANHATTAN;
+            }
+            case "manhattan", "chebyshev", "euclidean" -> {
+                spec.base = Base.CELLULAR;
+                spec.fractal = Fractal.NONE;
+                spec.returns = CellReturn.INVERSE;
+                spec.distance = type.equals("manhattan") ? CellDistance.MANHATTAN
+                        : type.equals("chebyshev") ? CellDistance.CHEBYSHEV : CellDistance.EUCLIDEAN;
             }
             default -> {
                 Noise.Kind kind = Noise.Kind.parse(type);
