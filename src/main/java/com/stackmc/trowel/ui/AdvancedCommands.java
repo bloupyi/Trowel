@@ -67,7 +67,7 @@ final class AdvancedCommands {
     void define() {
         c.add("spline|ezspline|ezsp|sp", SPLINES, "//spline [shape] <pattern> [radii] [-t twist] [-r roll] "
                         + "[-s stretch] [-e caps] [-n orientation] [-q quality] [-p tension:bias:continuity] [-w smoothblocks] [-h] [-c]",
-                "A shape swept along the points (//point). //spline help: shapes and settings.",
+                "A shape swept along the points (//point, or the //poly polygon as a loop). //spline help: shapes and settings.",
                 this::spline, this::completeSpline);
         c.add("point|points|pt", SPLINES, "//point [here|undo|clear|list|sel|reverse|insert <n>]",
                 "Adds a spline point on the aimed block. Also: sneak + left click with the wand.",
@@ -250,7 +250,10 @@ final class AdvancedCommands {
         Sweep.End end = values.containsKey('e') ? Sweep.End.parse(values.get('e')) : Sweep.End.FLAT;
         Sweep.Quality quality = values.containsKey('q') ? Sweep.Quality.parse(values.get('q')) : Sweep.Quality.BALANCED;
         Path.Normal normal = values.containsKey('n') ? Path.Normal.parse(values.get('n')) : Path.Normal.CONSISTENT;
-        boolean closed = bools.contains('c');
+        Session session = trowel.session(player);
+        boolean onPolygon = session.getPoints().stream().filter(p -> world.equals(p.getWorld())).count() < 2
+                && session.polygonal(world);
+        boolean closed = bools.contains('c') || (onPolygon && points.size() >= 3);
         if (closed && points.size() < 3) {
             throw new IllegalArgumentException("-c: a loop needs at least three points.");
         }
@@ -302,7 +305,7 @@ final class AdvancedCommands {
         };
     }
 
-    /** The spline points in this world; failing that, a straight line between both corners. */
+    /** The spline points in this world; failing that, the polygon (//poly); failing that, both corners. */
     private List<double[]> splinePoints(Player player) {
         Session session = trowel.session(player);
         List<double[]> points = new ArrayList<>();
@@ -314,6 +317,13 @@ final class AdvancedCommands {
         if (points.size() >= 2) {
             return points;
         }
+        if (session.polygonal(player.getWorld()) && session.getPolygonPoints().size() >= 2) {
+            points.clear();
+            for (Location point : session.getPolygonPoints()) {
+                points.add(new double[]{point.getBlockX() + 0.5, point.getBlockY() + 0.5, point.getBlockZ() + 0.5});
+            }
+            return points;
+        }
         Location a = session.getPos1();
         Location b = session.getPos2();
         if (a != null && b != null && player.getWorld().equals(a.getWorld()) && player.getWorld().equals(b.getWorld())) {
@@ -321,7 +331,7 @@ final class AdvancedCommands {
                     new double[]{b.getBlockX() + 0.5, b.getBlockY() + 0.5, b.getBlockZ() + 0.5});
         }
         throw new IllegalArgumentException("Place at least two points (//point on aimed blocks, or sneak + left "
-                + "click with the wand), or both corners of a selection for a straight line.");
+                + "click with the wand), a polygon (//poly), or both corners of a selection for a straight line.");
     }
 
     private void splineHelp(Player player, String shape) {
