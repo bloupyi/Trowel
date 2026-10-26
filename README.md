@@ -295,7 +295,8 @@ Types: `perlin`, `value`, `valuecubic`, `white`, `cellular`, `gabor`, and each n
 The spline is the most powerful tool: a **shape swept along points**.
 
 **1. Place the points**: `//point` on the aimed block (or sneak + left click with the wand).
-Without points, the spline goes from corner 1 to corner 2.
+Without points, the spline follows the polygon selection (`//poly`) as a closed loop, through each point
+at its height; without a polygon either, it goes from corner 1 to corner 2.
 
 | Command | Effect |
 |---------|--------|
