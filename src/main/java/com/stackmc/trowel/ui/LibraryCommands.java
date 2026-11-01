@@ -56,6 +56,14 @@ final class LibraryCommands {
         c.add("mask", LIBRARY, "//mask <save|list|show|delete> [name] [mask]",
                 "Named masks: //mask save ground #surface&!water, then @ground wherever a mask is asked.",
                 (p, a) -> named(p, a, trowel.masks(), "mask", false), namedCompleter(false));
+        c.add("formula|formulas|fx", LIBRARY, "//formula <save|list|show|delete> [name] [text]",
+                "Math formulas: //formula save hills perlin(fo:5) 48 80, then //terrain $hills. Also in //poly shape, "
+                        + "//spline expr, //generate. A formula can hold several arguments.",
+                this::formula, (player, args) -> args.length == 1
+                        ? Commands.filter(List.of("save", "list", "show", "delete"), args[0])
+                        : args.length == 2 && !args[0].equalsIgnoreCase("save")
+                        ? Commands.filter(new ArrayList<>(trowel.formulas().of(player.getUniqueId()).keySet()), args[1])
+                        : List.of());
         c.add("history|hist", HISTORY, "//history [page]",
                 "The latest operations: click to undo up to one, or only that one.", this::history, c.args("n:1|2"));
     }
@@ -238,6 +246,51 @@ final class LibraryCommands {
                 mine.forEach((name, value) -> player.sendMessage(Component.text("  @" + name, NamedTextColor.GOLD)
                         .clickEvent(ClickEvent.suggestCommand("@" + name))
                         .append(Component.text(" " + value, NamedTextColor.GRAY))));
+            }
+        }
+    }
+
+    private void formula(Player player, String[] args) {
+        String sub = args.length == 0 ? "list" : args[0].toLowerCase(Locale.ROOT);
+        PaletteStore store = trowel.formulas();
+        Map<String, String> mine = store.of(player.getUniqueId());
+        switch (sub) {
+            case "save" -> {
+                String name = Commands.need(args, 1, "//formula save <name> <text>").toLowerCase(Locale.ROOT);
+                if (!name.matches("[a-z][a-z0-9_]{0,23}")) {
+                    throw new IllegalArgumentException("Name: a letter then letters, digits and _, 24 at most.");
+                }
+                String value = Commands.join(args, 2);
+                if (value.isBlank()) {
+                    throw new IllegalArgumentException("Write the formula after the name.");
+                }
+                store.put(player.getUniqueId(), name, value);
+                Chat.info(player, "Formula saved: ", "$" + name);
+            }
+            case "delete", "remove" -> {
+                if (!store.remove(player.getUniqueId(), Commands.need(args, 1, "//formula delete <name>"))) {
+                    throw new IllegalArgumentException("You have no formula with that name.");
+                }
+                Chat.info(player, "Formula deleted.");
+            }
+            case "show" -> {
+                String name = Commands.need(args, 1, "//formula show <name>").toLowerCase(Locale.ROOT);
+                String value = mine.getOrDefault(name, PaletteStore.FORMULAS.get(name));
+                if (value == null) {
+                    throw new IllegalArgumentException("No formula with that name.");
+                }
+                player.sendMessage(Chat.suggest(value, "click: type"));
+            }
+            default -> {
+                Chat.info(player, "Formulas (click: type $name):");
+                Map<String, String> all = new java.util.TreeMap<>(PaletteStore.FORMULAS);
+                all.putAll(mine);
+                all.forEach((name, value) -> player.sendMessage(Component.text("  $" + name,
+                                mine.containsKey(name) ? NamedTextColor.GOLD : NamedTextColor.YELLOW)
+                        .clickEvent(ClickEvent.suggestCommand("$" + name))
+                        .append(Component.text(" " + value, NamedTextColor.GRAY))));
+                Chat.hint(player, "Terrain: alps, rolling, terraces, crackle. //poly shape 24 12: petals, blob, egg. "
+                        + "//spline expr <pattern> 4: ribbed, twisted.");
             }
         }
     }

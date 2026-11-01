@@ -82,6 +82,7 @@ public final class Trowel implements TrowelApi {
     private PaletteStore palettes;
     private PaletteStore patterns;
     private PaletteStore masks;
+    private PaletteStore formulas;
     private SchematicLibrary library;
     private PaletteEditor paletteEditor;
     private List<Listener> listeners = List.of();
@@ -116,6 +117,7 @@ public final class Trowel implements TrowelApi {
         palettes = new PaletteStore(plugin);
         patterns = PaletteStore.patterns(plugin);
         masks = PaletteStore.masks(plugin);
+        formulas = PaletteStore.formulas(plugin);
         library = new SchematicLibrary(plugin);
         paletteEditor = new PaletteEditor(this);
         commands = new Commands(this);
