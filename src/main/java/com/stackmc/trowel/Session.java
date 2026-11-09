@@ -55,6 +55,8 @@ public final class Session {
     private boolean editMarkers;
     /** Walk and fly through blocks in creative. */
     private boolean noclip;
+    /** Blocks placed or broken by hand do not update their neighbours, and placed sand stays put. */
+    private boolean noPhysics;
     /** Chosen with //flyspeed and //walkspeed; {@code null}: vanilla. */
     private Float flySpeed;
     private Float walkSpeed;

@@ -594,6 +594,15 @@ public final class Commands {
                     Chat.info(p, session.isNoclip() ? "Noclip on: walk or fly into a block to pass through it."
                             : "Noclip off.");
                 }, args("word:on|off"));
+        add("physics|ph", SETTINGS, "//physics [on|off]",
+                "Off: blocks you place or break by hand no longer update their neighbours, sand and gravel stay in the air.",
+                (p, a) -> {
+                    Session session = trowel.session(p);
+                    session.setNoPhysics(a.length == 0 ? !session.isNoPhysics() : a[0].equalsIgnoreCase("off"));
+                    Chat.info(p, session.isNoPhysics()
+                            ? "Physics off: what you place or break no longer updates its neighbours."
+                            : "Physics on.");
+                }, args("word:on|off"));
         add("flyspeed|fs", SETTINGS, "//flyspeed <1-10|reset>",
                 "Flying speed: 1 is vanilla, 10 the fastest, reset goes back to vanilla.",
                 (p, a) -> speed(p, a, true), args("n:reset|2|3|5|10"));
