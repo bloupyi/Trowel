@@ -18,6 +18,7 @@ import com.stackmc.trowel.ui.Commands;
 import com.stackmc.trowel.ui.Dialogs;
 import com.stackmc.trowel.ui.Hud;
 import com.stackmc.trowel.ui.NoClip;
+import com.stackmc.trowel.ui.NoPhysics;
 import com.stackmc.trowel.ui.PaletteEditor;
 import com.stackmc.trowel.ui.ToolListener;
 import io.papermc.paper.dialog.Dialog;
@@ -120,7 +121,7 @@ public final class Trowel implements TrowelApi {
         paletteEditor = new PaletteEditor(this);
         commands = new Commands(this);
 
-        listeners = List.of(new ToolListener(this), dialogs, paletteEditor);
+        listeners = List.of(new ToolListener(this), dialogs, paletteEditor, new NoPhysics(this));
         listeners.forEach(listener -> plugin.getServer().getPluginManager().registerEvents(listener, plugin));
         commands.register();
         hud.start();

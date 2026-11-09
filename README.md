@@ -606,6 +606,7 @@ the one in hand. A gradient in a brush: pattern `#gradient[##magma][y]`.
 | `//cancel` | Stops the running operation |
 | `//markers [protect\|edit]` | Protects (default) or not the markers |
 | `//noclip [on\|off]` | Walk and fly through blocks in creative: spectator while a block is in the way, creative again once out |
+| `//physics [on\|off]` | Off: blocks you place or break by hand no longer update their neighbours; sand, gravel and other gravity blocks you place stay in the air until broken |
 | `//flyspeed <1-10\|reset>`, `//walkspeed <1-10\|reset>` | Flying, walking speed: 1 is vanilla, 10 the fastest (decimals work), `reset` goes back to vanilla |
 | `//coedit [show\|share] [on\|off]` | See the selection of other builders in the same world while they hold a Trowel tool (off by default), show yours (on by default) |
 | `//axiom` | State of the Axiom support for you |
@@ -671,7 +672,7 @@ Arceon       //roof  //road  //river  //revolve  //resize  //shadow  //text  //l
 Brushes      //brushes  //brush <type>
 History      //undo [n|only n|sel|brush]  //redo  //history  //cancel
 Decor        //vines  //moss  //fill  //up  //debugstick
-Moving       //noclip  //flyspeed <1-10|reset>  //walkspeed <1-10|reset>
+Moving       //noclip  //physics  //flyspeed <1-10|reset>  //walkspeed <1-10|reset>
 Library      //schem save|load|list  //pattern save  //mask save  (@name)  //palette edit
 Help         //help  //spline help  //texture help  //palette list  G key
 ```
