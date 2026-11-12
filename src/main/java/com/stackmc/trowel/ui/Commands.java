@@ -212,7 +212,8 @@ public final class Commands {
             Chat.error(player, "Unknown action: " + name + ". //help for the list.");
             return;
         }
-        if (!Set.of("help", "axiom", "palettes", "functions", "cancel", "schem", "pattern", "mask", "coedit", "reload")
+        if (!Set.of("help", "axiom", "palettes", "functions", "cancel", "schem", "pattern", "mask", "formula", "coedit",
+                "reload")
                 .contains(action.name())) {
             String denied = trowel.host().denyEdit(player);
             if (denied != null) {
@@ -221,6 +222,13 @@ public final class Commands {
             }
         }
         clip = null;
+        if (!action.name().equals("formula") && args.length > 0) {
+            String line = String.join(" ", args);
+            String expanded = trowel.formulas().expand(player.getUniqueId(), line);
+            if (!expanded.equals(line)) {
+                args = expanded.trim().split("\\s+");
+            }
+        }
         try {
             action.handler().run(player, args);
         } catch (IllegalArgumentException e) {
@@ -267,9 +275,10 @@ public final class Commands {
         add("pos2", SELECTION, "//pos2", "Second corner at your feet.", (p, a) -> corner(p, feet(p), false), null);
         add("hpos1", SELECTION, "//hpos1", "First corner on the aimed block.", (p, a) -> corner(p, target(p), true), null);
         add("hpos2", SELECTION, "//hpos2", "Second corner on the aimed block.", (p, a) -> corner(p, target(p), false), null);
-        add("poly|polygon", SELECTION, "//poly [add [x y z] | undo | clear]",
-                "Polygon selection: gives its wand, or adds a point (at your feet), removes the last, clears.",
-                this::polygon, args("word:add|undo|clear"));
+        add("poly|polygon", SELECTION, "//poly [add [x y z] | undo | clear | shape <points> <radius> <r(a)>]",
+                "Polygon selection: gives its wand, or adds a point (at your feet), removes the last, clears. "
+                        + "shape: a polygon around you whose radius follows a formula of the angle a, like $petals.",
+                this::polygon, args("word:add|undo|clear|shape", "n:12|24|48", "n:8|16|32", "word:$petals|$blob|$egg"));
         add("sel|desel", SELECTION, "//sel", "Clears the selection.", (p, a) -> {
             trowel.session(p).clearSelection();
             Chat.info(p, "Selection cleared.");
@@ -1268,7 +1277,33 @@ public final class Commands {
                 session.clearSelection();
                 Chat.info(player, "Polygon cleared.");
             }
-            default -> throw new IllegalArgumentException("Usage: //poly [add [x y z] | undo | clear]");
+            case "shape" -> {
+                String usage = "//poly shape <points> <radius> <r(a)>";
+                int count = integer(need(args, 1, usage), 3, Polygon.MAX_POINTS, "Points");
+                int radius = integer(need(args, 2, usage), 1, 256, "Radius");
+                need(args, 3, usage);
+                com.stackmc.trowel.expr.Expression formula = com.stackmc.trowel.expr.Expression.compile(join(args, 3),
+                        "a", "t", "i");
+                Block f = feet(player);
+                session.clearSelection();
+                org.bukkit.Location last = null;
+                for (int i = 0; i < count; i++) {
+                    double a = 2 * Math.PI * i / count;
+                    double r = radius * formula.evaluate(a, (double) i / count, i);
+                    if (!Double.isFinite(r)) {
+                        continue;
+                    }
+                    org.bukkit.Location point = new org.bukkit.Location(world, Math.round(f.getX() + r * Math.cos(a)),
+                            f.getY(), Math.round(f.getZ() + r * Math.sin(a)));
+                    if (!point.equals(last)) {
+                        session.addPolygonPoint(point);
+                        last = point;
+                    }
+                }
+                Chat.info(player, "Polygon of " + session.getPolygonPoints().size() + " points: ",
+                        formula.source() + describePolygon(player));
+            }
+            default -> throw new IllegalArgumentException("Usage: //poly [add [x y z] | undo | clear | shape <points> <radius> <r(a)>]");
         }
         trowel.hud().showSelection(player);
     }
