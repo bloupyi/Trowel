@@ -33,3 +33,12 @@ axiom:
   # Axiom permission granted while the player may build. axiom.default suits a public
   # server; axiom.all grants everything.
   permission: axiom.default
+
+download:
+  # //schem download gives a link to a library schematic, as a Litematica file (schem) or in
+  # Trowel's own format (raw). Trowel serves it on this port; 0 turns it off. Open the port
+  # on your host.
+  port: 8125
+  # Address players reach that port at, e.g. http://play.example.com:8125. Empty: the
+  # server-ip of server.properties, or localhost.
+  url: ""

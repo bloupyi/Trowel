@@ -84,6 +84,7 @@ public final class Trowel implements TrowelApi {
     private PaletteStore patterns;
     private PaletteStore masks;
     private SchematicLibrary library;
+    private SchematicDownloads downloads;
     private PaletteEditor paletteEditor;
     private List<Listener> listeners = List.of();
 
@@ -118,6 +119,8 @@ public final class Trowel implements TrowelApi {
         patterns = PaletteStore.patterns(plugin);
         masks = PaletteStore.masks(plugin);
         library = new SchematicLibrary(plugin);
+        downloads = new SchematicDownloads(plugin);
+        downloads.start(settings);
         paletteEditor = new PaletteEditor(this);
         commands = new Commands(this);
 
@@ -162,6 +165,9 @@ public final class Trowel implements TrowelApi {
         if (axiom != null) {
             axiom.disable();
         }
+        if (downloads != null) {
+            downloads.stop();
+        }
         if (engine != null) {
             engine.shutdown();
         }
@@ -179,6 +185,7 @@ public final class Trowel implements TrowelApi {
         if (axiom != null) {
             axiom.reload();
         }
+        downloads.start(settings);
     }
 
     public Session session(Player player) {

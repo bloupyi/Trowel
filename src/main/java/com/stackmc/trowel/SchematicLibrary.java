@@ -315,6 +315,35 @@ public final class SchematicLibrary {
         });
     }
 
+    /**
+     * The schematic as a file: Trowel's own ({@code raw}) or a Litematica one. {@code done} and
+     * {@code failed} run on the main thread.
+     */
+    public void export(String name, boolean raw, int dataVersion, Consumer<byte[]> done, Consumer<String> failed) {
+        String key = name.toLowerCase(Locale.ROOT);
+        Entry entry = index.get(key);
+        File file = new File(folder, key + ".tsch");
+        if (entry == null || !file.isFile()) {
+            failed.accept("Unknown schematic: " + key + ". //schem list for the library.");
+            return;
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                byte[] bytes;
+                if (raw) {
+                    bytes = Files.readAllBytes(file.toPath());
+                } else {
+                    Raw r = read(file);
+                    bytes = LitematicFile.write(key, entry.authorName(), r.bounds(), r.palette(), r.cells(), dataVersion,
+                            entry.createdAt());
+                }
+                Bukkit.getScheduler().runTask(plugin, () -> done.accept(bytes));
+            } catch (IOException e) {
+                Bukkit.getScheduler().runTask(plugin, () -> failed.accept("could not read (" + e.getMessage() + ")."));
+            }
+        });
+    }
+
     static Raw read(File file) throws IOException {
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(
                 new GZIPInputStream(new FileInputStream(file))))) {

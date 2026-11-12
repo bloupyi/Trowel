@@ -41,6 +41,8 @@ mvn clean install
 | `wand.material` | WOODEN_AXE | Item used as the selection wand |
 | `axiom.enabled` | true | Axiom support, if AxiomPaper is installed |
 | `axiom.permission` | axiom.default | Axiom permission granted while the player may build |
+| `download.port` | 8125 | Port serving `//schem download` links, 0: off (open it on your host) |
+| `download.url` | (empty) | Public address of that port, e.g. `http://play.example.com:8125`; empty: `server-ip`, or localhost |
 
 ### Permissions
 
@@ -558,6 +560,7 @@ top view, shown on hover.
 | `//schem load <name>` | Loads it back into the clipboard, then `//paste` |
 | `//schem list [search\|page]` | The library, click to load |
 | `//schem info <name>`, `//schem delete <name>` | Thumbnail and details; delete (author only) |
+| `//schem download <name> <schem\|raw>` | A link to download it, valid 10 minutes: `schem` a `.litematic` for Litematica (blocks only: no markers, no sign or chest contents), `raw` Trowel's own `.tsch` file |
 
 The **Library** window (G key) shows schematics with their thumbnail as a tooltip.
 
@@ -673,7 +676,7 @@ Brushes      //brushes  //brush <type>
 History      //undo [n|only n|sel|brush]  //redo  //history  //cancel
 Decor        //vines  //moss  //fill  //up  //debugstick
 Moving       //noclip  //physics  //flyspeed <1-10|reset>  //walkspeed <1-10|reset>
-Library      //schem save|load|list  //pattern save  //mask save  (@name)  //palette edit
+Library      //schem save|load|list|download  //pattern save  //mask save  (@name)  //palette edit
 Help         //help  //spline help  //texture help  //palette list  G key
 ```
 
