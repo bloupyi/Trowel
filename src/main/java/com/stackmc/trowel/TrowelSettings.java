@@ -20,10 +20,13 @@ import org.bukkit.plugin.java.JavaPlugin;
  * @param strokeTicks     two brush strokes closer than this are undone together
  * @param axiomEnabled    Axiom active wherever Trowel is, if AxiomPaper is installed
  * @param axiomPermission Axiom permission granted while the player may build
+ * @param downloadPort    port of the schematic download server, 0: off
+ * @param downloadUrl     public address of that server, empty: the server's own
  */
 public record TrowelSettings(int maxBlocks, int blocksPerTick, int undoSteps, int maxChunks,
                               int reach, int maxBrushSize, int strokeTicks, Material wandMaterial,
-                              boolean axiomEnabled, String axiomPermission) {
+                              boolean axiomEnabled, String axiomPermission, int downloadPort,
+                              String downloadUrl) {
 
     public static TrowelSettings load(JavaPlugin plugin) {
         plugin.saveDefaultConfig();
@@ -40,7 +43,9 @@ public record TrowelSettings(int maxBlocks, int blocksPerTick, int undoSteps, in
                 clamp(yaml.getInt("tools.stroke-ticks", 30), 0, 400),
                 wand == null || wand.isBlock() ? Material.WOODEN_AXE : wand,
                 yaml.getBoolean("axiom.enabled", true),
-                yaml.getString("axiom.permission", "axiom.default"));
+                yaml.getString("axiom.permission", "axiom.default"),
+                clamp(yaml.getInt("download.port", 8125), 0, 65535),
+                yaml.getString("download.url", ""));
     }
 
     /** Lets a player go past {@code max-blocks} and {@code max-chunks}. */

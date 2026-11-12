@@ -2,6 +2,7 @@ package com.stackmc.trowel.ui;
 
 import com.stackmc.trowel.Chat;
 import com.stackmc.trowel.PaletteStore;
+import com.stackmc.trowel.SchematicDownloads;
 import com.stackmc.trowel.SchematicLibrary;
 import com.stackmc.trowel.Trowel;
 import com.stackmc.trowel.api.Box;
@@ -15,6 +16,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -41,14 +43,17 @@ final class LibraryCommands {
     }
 
     void define() {
-        c.add("schem|schematic|lib", LIBRARY, "//schem <save|load|list|info|delete> [name] [-p] [-c]",
+        c.add("schem|schematic|lib", LIBRARY, "//schem <save|load|list|info|download|delete> [name] [schem|raw] [-p] [-c]",
                 "The shared library: save stores the selection (-c: the clipboard instead, -p: private), "
-                        + "load brings it back, list shows the thumbnails.", this::schem,
+                        + "load brings it back, list shows the thumbnails, download gives a link to the file "
+                        + "(schem: Litematica, raw: Trowel's own).", this::schem,
                 (player, args) -> args.length == 1
-                        ? Commands.filter(List.of("save", "load", "list", "info", "delete"), args[0])
+                        ? Commands.filter(List.of("save", "load", "list", "info", "download", "delete"), args[0])
                         : args.length == 2 && !args[0].equalsIgnoreCase("save")
                         ? Commands.filter(trowel.library().list(player.getUniqueId(), "").stream()
                         .map(SchematicLibrary.Entry::name).toList(), args[1])
+                        : args.length == 3 && args[0].equalsIgnoreCase("download")
+                        ? Commands.filter(List.of("schem", "raw"), args[2])
                         : List.of());
         c.add("pattern", LIBRARY, "//pattern <save|list|show|delete> [name] [pattern]",
                 "Named patterns: //pattern save stones 60%stone,40%andesite, then @stones wherever a pattern is asked.",
@@ -133,6 +138,31 @@ final class LibraryCommands {
                 }
                 info(player, entry);
             }
+            case "download", "dl" -> {
+                String usage = "//schem download <name> <schem|raw>";
+                SchematicLibrary.Entry entry = library.find(Commands.need(plain, 1, usage));
+                if (entry == null || !entry.visibleTo(player.getUniqueId())) {
+                    throw new IllegalArgumentException("Unknown schematic.");
+                }
+                boolean raw = switch (Commands.need(plain, 2, usage).toLowerCase(Locale.ROOT)) {
+                    case "raw" -> true;
+                    case "schem" -> false;
+                    default -> throw new IllegalArgumentException("Usage: " + usage);
+                };
+                if (!trowel.downloads().running()) {
+                    throw new IllegalArgumentException("Downloads are off: set download.port in Trowel's config.yml.");
+                }
+                library.export(entry.name(), raw, Bukkit.getUnsafe().getDataVersion(), bytes -> {
+                    String file = entry.name() + (raw ? ".tsch" : ".litematic");
+                    String url = trowel.downloads().offer(file, bytes);
+                    player.sendMessage(Component.text("  [download " + file + "]", NamedTextColor.AQUA)
+                            .clickEvent(ClickEvent.openUrl(url))
+                            .hoverEvent(HoverEvent.showText(Component.text(url))));
+                    Chat.hint(player, (raw ? "Trowel's own format (.tsch)."
+                            : "For Litematica: markers and block contents (signs, chests) are not included.")
+                            + " The link works " + SchematicDownloads.LIFETIME_MINUTES + " min.");
+                }, error -> Chat.error(player, "Download: " + error));
+            }
             case "delete", "remove" -> {
                 String error = library.delete(Commands.need(plain, 1, "//schem delete <name>"), player.getUniqueId(), admin);
                 if (error != null) {
@@ -187,7 +217,11 @@ final class LibraryCommands {
         Chat.info(player, e.name() + ": ", e.size() + ", " + e.blocks() + " blocks, by " + e.authorName()
                 + (e.shared() ? ", shared" : ", private"));
         player.sendMessage(Component.text("  [load]", NamedTextColor.AQUA)
-                .clickEvent(ClickEvent.runCommand("/trowel schem load " + e.name())));
+                .clickEvent(ClickEvent.runCommand("/trowel schem load " + e.name()))
+                .append(Component.text(" [download]", NamedTextColor.AQUA)
+                        .clickEvent(ClickEvent.runCommand("/trowel schem download " + e.name() + " schem")))
+                .append(Component.text(" [raw]", NamedTextColor.GRAY)
+                        .clickEvent(ClickEvent.runCommand("/trowel schem download " + e.name() + " raw"))));
     }
 
     // -------------------------------------------------------- patterns, masks
